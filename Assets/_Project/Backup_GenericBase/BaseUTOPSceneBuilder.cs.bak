@@ -1,0 +1,973 @@
+#if UNITY_EDITOR
+using System.Collections.Generic;
+using System.IO;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+using UnityEngine.UI;
+using TMPro;
+using SimuladorBloqueos.Environment;
+using SimuladorBloqueos.UI;
+
+namespace SimuladorBloqueos.EditorTools
+{
+    /// <summary>
+    /// Generador técnico del entorno 3D de la Base UTOP.
+    /// Crea la arquitectura institucional completa de 2 plantas, exteriores, mobiliario,
+    /// iluminación URP, puntos de interacción, jugador anatómico articulado y HUD táctico.
+    /// </summary>
+    public static class BaseUTOPSceneBuilder
+    {
+        private const string ScenePath = "Assets/_Project/Scenes/BaseUTOP/BaseUTOP.unity";
+        private const string MaterialsFolder = "Assets/_Project/Art/Materials";
+
+        [MenuItem("Simulador/Construir Base UTOP Completa")]
+        public static void BuildBaseUTOPScene()
+        {
+            Debug.Log("<color=cyan><b>[BaseUTOP] Iniciando construcción de la Base UTOP...</b></color>");
+
+            EnsureDirectories();
+            var materials = CreateOrLoadMaterials();
+
+            // Crear nueva escena vacía
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            // Raíz de la escena
+            var sceneRoot = new GameObject("[ENTORNO_BASE_UTOP]");
+
+            // 1. Iluminación y Skybox URP
+            SetupEnvironmentLighting(sceneRoot.transform);
+
+            // 2. Exteriores y Patio Central
+            BuildExteriorPlaza(sceneRoot.transform, materials);
+
+            // 3. Estructura Arquitectónica Principal (Planta Baja y Planta Alta)
+            BuildBuildingStructure(sceneRoot.transform, materials);
+
+            // 4. Mobiliario e Interiores
+            BuildInteriorGroundFloor(sceneRoot.transform, materials);
+            BuildInteriorUpperFloor(sceneRoot.transform, materials);
+
+            // 5. Escalera Funcional y Rampa de Suavizado Físico
+            BuildStaircase(sceneRoot.transform, materials);
+
+            // 6. Señalización Institucional
+            BuildSignage(sceneRoot.transform, materials);
+
+            // 7. Puntos de Interacción
+            BuildInteractionZones(sceneRoot.transform, materials);
+
+            // 8. Jugador y Cámara 3ra Persona
+            var player = BuildPlayer(sceneRoot.transform, materials);
+
+            // 9. HUD de Simulación e Interacción
+            BuildUIHierarchy(player);
+
+            // Guardar Escena
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log($"<color=green><b>[BaseUTOP] Escena guardada exitosamente en {ScenePath}</b></color>");
+
+            // Actualizar Build Settings
+            UpdateBuildSettings();
+
+            // Enfocar la escena en el Editor
+            Selection.activeGameObject = player;
+            if (SceneView.lastActiveSceneView != null)
+            {
+                SceneView.lastActiveSceneView.FrameSelected();
+            }
+        }
+
+        private static void EnsureDirectories()
+        {
+            if (!AssetDatabase.IsValidFolder("Assets/_Project/Scenes/BaseUTOP"))
+            {
+                AssetDatabase.CreateFolder("Assets/_Project/Scenes", "BaseUTOP");
+            }
+            if (!AssetDatabase.IsValidFolder("Assets/_Project/Art/Materials"))
+            {
+                AssetDatabase.CreateFolder("Assets/_Project/Art", "Materials");
+            }
+        }
+
+        #region Materiales URP
+        private static Dictionary<string, Material> CreateOrLoadMaterials()
+        {
+            var dict = new Dictionary<string, Material>();
+            var urpShader = Shader.Find("Universal Render Pipeline/Lit");
+            if (urpShader == null) urpShader = Shader.Find("Standard");
+
+            // Función auxiliar para crear y guardar material
+            Material GetMat(string name, Color color, float smoothness = 0.3f, float metallic = 0.0f, Color? emission = null)
+            {
+                string path = $"{MaterialsFolder}/{name}.mat";
+                var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (mat == null)
+                {
+                    mat = new Material(urpShader) { name = name };
+                    AssetDatabase.CreateAsset(mat, path);
+                }
+                mat.color = color;
+                if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", smoothness);
+                if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", metallic);
+                if (emission.HasValue && mat.HasProperty("_EmissionColor"))
+                {
+                    mat.EnableKeyword("_EMISSION");
+                    mat.SetColor("_EmissionColor", emission.Value);
+                }
+                EditorUtility.SetDirty(mat);
+                dict[name] = mat;
+                return mat;
+            }
+
+            // Materiales de fachada e interiores
+            GetMat("Mat_UTOP_Concrete_Exterior", new Color(0.24f, 0.25f, 0.27f), 0.2f, 0.0f); // Hormigón gris institucional
+            GetMat("Mat_UTOP_Concrete_Accent", new Color(0.12f, 0.13f, 0.14f), 0.35f, 0.1f); // Marco oscuro sobrio
+            GetMat("Mat_UTOP_Wall_Interior", new Color(0.85f, 0.86f, 0.88f), 0.15f, 0.0f); // Pared blanca institucional
+            GetMat("Mat_UTOP_Wall_Accent", new Color(0.18f, 0.22f, 0.26f), 0.25f, 0.0f); // Pared de acento azul pizarra
+            GetMat("Mat_UTOP_Floor_Tile", new Color(0.72f, 0.73f, 0.74f), 0.65f, 0.05f); // Piso cerámico pulido
+            GetMat("Mat_UTOP_Floor_Wood", new Color(0.38f, 0.26f, 0.18f), 0.45f, 0.0f); // Piso madera sala de mando
+            GetMat("Mat_UTOP_Ceiling", new Color(0.92f, 0.92f, 0.93f), 0.1f, 0.0f); // Techo falso
+            GetMat("Mat_UTOP_Asphalt", new Color(0.14f, 0.14f, 0.15f), 0.15f, 0.0f); // Asfalto exterior patio
+            GetMat("Mat_UTOP_Sidewalk", new Color(0.45f, 0.46f, 0.47f), 0.2f, 0.0f); // Veredas y aceras
+            GetMat("Mat_UTOP_Glass", new Color(0.3f, 0.5f, 0.6f, 0.35f), 0.95f, 0.1f); // Vidrio
+            GetMat("Mat_UTOP_Metal_Dark", new Color(0.10f, 0.10f, 0.11f), 0.6f, 0.7f); // Metal perfilería
+            GetMat("Mat_UTOP_Metal_Chrome", new Color(0.8f, 0.82f, 0.85f), 0.85f, 0.85f); // Barandillas y herrajes
+            GetMat("Mat_UTOP_Wood_Desk", new Color(0.42f, 0.30f, 0.20f), 0.4f, 0.0f); // Madera escritorios
+            GetMat("Mat_UTOP_Fabric_Navy", new Color(0.08f, 0.12f, 0.20f), 0.2f, 0.0f); // Tapicería institucional
+            GetMat("Mat_UTOP_Fabric_Grey", new Color(0.25f, 0.26f, 0.28f), 0.15f, 0.0f); // Sillas oficina
+            GetMat("Mat_UTOP_Plant_Green", new Color(0.15f, 0.38f, 0.18f), 0.2f, 0.0f); // Follaje jardineras
+            GetMat("Mat_UTOP_Screen_Tactical", new Color(0.05f, 0.12f, 0.22f), 0.7f, 0.2f, new Color(0.08f, 0.45f, 0.75f) * 1.8f); // Pantallas tácticas
+            GetMat("Mat_UTOP_Ceiling_Light", new Color(1f, 1f, 1f), 0.9f, 0.0f, new Color(1f, 0.98f, 0.9f) * 2.2f); // Luminarias LED
+            GetMat("Mat_UTOP_Gold_Brass", new Color(0.85f, 0.70f, 0.25f), 0.75f, 0.8f); // Placas y detalles dorados
+            GetMat("Mat_UTOP_Bollard_Stripe", new Color(0.92f, 0.75f, 0.15f), 0.3f, 0.0f); // Franjas de advertencia táctica
+
+            AssetDatabase.SaveAssets();
+            return dict;
+        }
+        #endregion
+
+        #region Iluminación y Entorno
+        private static void SetupEnvironmentLighting(Transform root)
+        {
+            var lightingGroup = new GameObject("Environment_Lighting");
+            lightingGroup.transform.SetParent(root, false);
+
+            // Luz solar direccional suave
+            var sunGo = new GameObject("Directional_Sun");
+            sunGo.transform.SetParent(lightingGroup.transform, false);
+            sunGo.transform.rotation = Quaternion.Euler(46f, -38f, 0f);
+
+            var light = sunGo.AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.color = new Color(1.0f, 0.96f, 0.90f);
+            light.intensity = 1.15f;
+            light.shadows = LightShadows.Soft;
+
+            // Volume de Post-Procesado URP
+            var volGo = new GameObject("Global_Volume");
+            volGo.transform.SetParent(lightingGroup.transform, false);
+            var volume = volGo.AddComponent<Volume>();
+            volume.isGlobal = true;
+
+            var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>("Assets/_Project/Settings/MainMenuVolumeProfile.asset");
+            if (profile != null)
+            {
+                volume.sharedProfile = profile;
+            }
+        }
+        #endregion
+
+        #region Exteriores y Patio Central
+        private static void BuildExteriorPlaza(Transform root, Dictionary<string, Material> mats)
+        {
+            var plazaGroup = new GameObject("Exterior_Plaza");
+            plazaGroup.transform.SetParent(root, false);
+
+            // Suelo de asfalto / patio de formación (48m de ancho x 32m de fondo, de Z = -34 a Z = -2)
+            CreateBox("Patio_Asphalt", plazaGroup.transform, new Vector3(0, -0.25f, -18f), new Vector3(50f, 0.5f, 32f), mats["Mat_UTOP_Asphalt"]);
+
+            // Explanada de acceso peatonal (vereda de hormigón) frente a la fachada (Z = -6 a Z = -2)
+            CreateBox("Pedestrian_Sidewalk", plazaGroup.transform, new Vector3(0, 0.05f, -4f), new Vector3(38f, 0.1f, 4f), mats["Mat_UTOP_Sidewalk"]);
+
+            // Muro perimetral exterior (izq, der, fondo exterior)
+            CreateBox("Wall_Perimeter_Left", plazaGroup.transform, new Vector3(-24.5f, 1.6f, -18f), new Vector3(1f, 3.2f, 32f), mats["Mat_UTOP_Concrete_Accent"]);
+            CreateBox("Wall_Perimeter_Right", plazaGroup.transform, new Vector3(24.5f, 1.6f, -18f), new Vector3(1f, 3.2f, 32f), mats["Mat_UTOP_Concrete_Accent"]);
+            CreateBox("Wall_Perimeter_Front", plazaGroup.transform, new Vector3(0, 1.6f, -33.5f), new Vector3(50f, 3.2f, 1f), mats["Mat_UTOP_Concrete_Accent"]);
+
+            // Portón de acceso vehicular/peatonal exterior (hueco en pared frontal con postes tácticos)
+            CreateBox("Gate_Post_L", plazaGroup.transform, new Vector3(-5f, 1.8f, -33f), new Vector3(1.2f, 3.6f, 1.2f), mats["Mat_UTOP_Concrete_Exterior"]);
+            CreateBox("Gate_Post_R", plazaGroup.transform, new Vector3(5f, 1.8f, -33f), new Vector3(1.2f, 3.6f, 1.2f), mats["Mat_UTOP_Concrete_Exterior"]);
+
+            // Asta de bandera institucional central en el patio (Z = -18, X = 0)
+            var flagBase = CreateCylinder("Flagpole_Base", plazaGroup.transform, new Vector3(0, 0.3f, -18f), new Vector3(1.8f, 0.6f, 1.8f), mats["Mat_UTOP_Concrete_Accent"]);
+            var pole = CreateCylinder("Flagpole_Shaft", flagBase.transform, new Vector3(0, 5.5f, 0), new Vector3(0.12f, 5.5f, 0.12f), mats["Mat_UTOP_Metal_Chrome"]);
+            CreateBox("Flag_Mesh", pole.transform, new Vector3(0.9f, 4.2f, 0), new Vector3(1.8f, 1.1f, 0.04f), mats["Mat_UTOP_Wall_Accent"]);
+
+            // Jardineras decorativas con setos a los lados de la entrada
+            BuildPlanter(plazaGroup.transform, new Vector3(-10f, 0.35f, -4f), new Vector3(10f, 0.7f, 1.6f), mats);
+            BuildPlanter(plazaGroup.transform, new Vector3(10f, 0.35f, -4f), new Vector3(10f, 0.7f, 1.6f), mats);
+
+            // Luminarias de exterior tipo báculo/poste
+            BuildStreetLight(plazaGroup.transform, new Vector3(-14f, 0f, -14f), mats);
+            BuildStreetLight(plazaGroup.transform, new Vector3(14f, 0f, -14f), mats);
+        }
+
+        private static void BuildPlanter(Transform parent, Vector3 pos, Vector3 size, Dictionary<string, Material> mats)
+        {
+            var planter = CreateBox("Planter_Box", parent, pos, size, mats["Mat_UTOP_Concrete_Accent"]);
+            CreateBox("Hedge_Green", planter.transform, pos + new Vector3(0, size.y * 0.7f, 0), new Vector3(size.x - 0.3f, size.y * 0.8f, size.z - 0.3f), mats["Mat_UTOP_Plant_Green"]);
+        }
+
+        private static void BuildStreetLight(Transform parent, Vector3 pos, Dictionary<string, Material> mats)
+        {
+            var pole = CreateCylinder("StreetLight_Pole", parent, pos + new Vector3(0, 2.5f, 0), new Vector3(0.2f, 2.5f, 0.2f), mats["Mat_UTOP_Metal_Dark"]);
+            var head = CreateBox("Light_Head", pole.transform, pos + new Vector3(0, 5.1f, 0), new Vector3(0.6f, 0.2f, 0.8f), mats["Mat_UTOP_Metal_Dark"]);
+            CreateBox("Bulb", head.transform, pos + new Vector3(0, 4.95f, 0), new Vector3(0.4f, 0.08f, 0.6f), mats["Mat_UTOP_Ceiling_Light"]);
+
+            var lightObj = new GameObject("Street_Spot");
+            lightObj.transform.SetParent(head.transform, false);
+            lightObj.transform.position = pos + new Vector3(0, 4.8f, 0);
+            lightObj.transform.rotation = Quaternion.Euler(70f, 0, 0);
+            var l = lightObj.AddComponent<Light>();
+            l.type = LightType.Spot;
+            l.spotAngle = 75f;
+            l.range = 14f;
+            l.intensity = 2.5f;
+            l.color = new Color(1f, 0.95f, 0.85f);
+        }
+        #endregion
+
+        #region Estructura Arquitectónica Principal (Edificio 2 Plantas)
+        private static void BuildBuildingStructure(Transform root, Dictionary<string, Material> mats)
+        {
+            var bldgGroup = new GameObject("Building_Architecture");
+            bldgGroup.transform.SetParent(root, false);
+
+            // Medidas del edificio: Ancho 36m (X: -18 a 18), Fondo 24m (Z: -2 a 22)
+            // Altura PB: 3.8m, Entrepiso: 0.3m, Altura PA: 3.8m, Techo: 0.3m -> Altura total: 8.2m
+
+            // 1. Suelo Planta Baja (Cerámica institucional)
+            CreateBox("Floor_Ground", bldgGroup.transform, new Vector3(0, 0.05f, 10f), new Vector3(36f, 0.1f, 24f), mats["Mat_UTOP_Floor_Tile"]);
+
+            // 2. Losa Entrepiso (Piso Planta Alta) con apertura para hueco de escalera (X: -8 a -2, Z: 5 a 13)
+            // Dividido en 3 secciones para dejar el hueco exacto
+            CreateBox("Slab_Upper_Right", bldgGroup.transform, new Vector3(8f, 3.8f, 10f), new Vector3(20f, 0.3f, 24f), mats["Mat_UTOP_Floor_Tile"]);
+            CreateBox("Slab_Upper_Left_Front", bldgGroup.transform, new Vector3(-10f, 3.8f, 1.5f), new Vector3(16f, 0.3f, 7f), mats["Mat_UTOP_Floor_Tile"]);
+            CreateBox("Slab_Upper_Left_Back", bldgGroup.transform, new Vector3(-10f, 3.8f, 17.5f), new Vector3(16f, 0.3f, 9f), mats["Mat_UTOP_Floor_Tile"]);
+            CreateBox("Slab_Upper_Left_Far", bldgGroup.transform, new Vector3(-13f, 3.8f, 9f), new Vector3(10f, 0.3f, 8f), mats["Mat_UTOP_Floor_Tile"]);
+
+            // Barandillas de seguridad alrededor del hueco de la escalera en Planta Alta
+            BuildBalustrade(bldgGroup.transform, new Vector3(-2f, 4.45f, 9f), new Vector3(0.1f, 1.0f, 8f), mats);
+            BuildBalustrade(bldgGroup.transform, new Vector3(-5f, 4.45f, 13f), new Vector3(6f, 1.0f, 0.1f), mats);
+
+            // 3. Techo Superior / Cubierta Edificio
+            CreateBox("Roof_Ceiling", bldgGroup.transform, new Vector3(0, 7.8f, 10f), new Vector3(36.8f, 0.4f, 24.8f), mats["Mat_UTOP_Ceiling"]);
+            CreateBox("Parapet_Front", bldgGroup.transform, new Vector3(0, 8.3f, -2.2f), new Vector3(36.8f, 0.8f, 0.4f), mats["Mat_UTOP_Concrete_Accent"]);
+
+            // 4. Muros Exteriores
+            // Muro Trasero (Z = 22)
+            CreateBox("Wall_Ext_Back", bldgGroup.transform, new Vector3(0, 3.9f, 22f), new Vector3(36f, 7.8f, 0.4f), mats["Mat_UTOP_Concrete_Exterior"]);
+            // Muro Lateral Izquierdo (X = -18)
+            CreateBox("Wall_Ext_Left", bldgGroup.transform, new Vector3(-18f, 3.9f, 10f), new Vector3(0.4f, 7.8f, 24f), mats["Mat_UTOP_Concrete_Exterior"]);
+            // Muro Lateral Derecho (X = 18)
+            CreateBox("Wall_Ext_Right", bldgGroup.transform, new Vector3(18f, 3.9f, 10f), new Vector3(0.4f, 7.8f, 24f), mats["Mat_UTOP_Concrete_Exterior"]);
+
+            // Muro Frontal (Fachada Principal en Z = -2) con gran ventanal y puerta institucional
+            // Ala izquierda de fachada
+            CreateBox("Wall_Ext_Front_Left", bldgGroup.transform, new Vector3(-11f, 3.9f, -2f), new Vector3(14f, 7.8f, 0.4f), mats["Mat_UTOP_Concrete_Exterior"]);
+            // Ala derecha de fachada
+            CreateBox("Wall_Ext_Front_Right", bldgGroup.transform, new Vector3(11f, 3.9f, -2f), new Vector3(14f, 7.8f, 0.4f), mats["Mat_UTOP_Concrete_Exterior"]);
+            // Dintel superior entrada principal
+            CreateBox("Wall_Ext_Front_Top", bldgGroup.transform, new Vector3(0, 5.8f, -2f), new Vector3(8f, 4.0f, 0.4f), mats["Mat_UTOP_Concrete_Accent"]);
+            // Vidriera y marco puerta principal (X: -4 a 4, Y: 0 a 3.8m)
+            CreateBox("Glass_Entrance_Top", bldgGroup.transform, new Vector3(0, 3.3f, -2f), new Vector3(7.6f, 1.0f, 0.1f), mats["Mat_UTOP_Glass"]);
+            CreateBox("Glass_Entrance_Left", bldgGroup.transform, new Vector3(-2.8f, 1.5f, -2f), new Vector3(2.0f, 2.6f, 0.1f), mats["Mat_UTOP_Glass"]);
+            CreateBox("Glass_Entrance_Right", bldgGroup.transform, new Vector3(2.8f, 1.5f, -2f), new Vector3(2.0f, 2.6f, 0.1f), mats["Mat_UTOP_Glass"]);
+            // Puertas batientes (abiertas en ángulo para libre paso del jugador)
+            var doorL = CreateBox("Door_Glass_L", bldgGroup.transform, new Vector3(-1.4f, 1.4f, -1.3f), new Vector3(0.08f, 2.6f, 1.3f), mats["Mat_UTOP_Glass"]);
+            var doorR = CreateBox("Door_Glass_R", bldgGroup.transform, new Vector3(1.4f, 1.4f, -1.3f), new Vector3(0.08f, 2.6f, 1.3f), mats["Mat_UTOP_Glass"]);
+
+            // Columnas monumentales de acceso
+            CreateBox("Pillar_Piazza_L", bldgGroup.transform, new Vector3(-4.2f, 3.9f, -3.2f), new Vector3(0.8f, 7.8f, 0.8f), mats["Mat_UTOP_Concrete_Accent"]);
+            CreateBox("Pillar_Piazza_R", bldgGroup.transform, new Vector3(4.2f, 3.9f, -3.2f), new Vector3(0.8f, 7.8f, 0.8f), mats["Mat_UTOP_Concrete_Accent"]);
+            CreateBox("Piazza_Header", bldgGroup.transform, new Vector3(0, 7.6f, -3.2f), new Vector3(10.0f, 0.8f, 1.2f), mats["Mat_UTOP_Concrete_Accent"]);
+
+            // 5. Muros Interiores Planta Baja (Y = 1.9m, Alto = 3.7m)
+            // Pasillo central: de X = -2 a X = 2, corre de Z = -2 a Z = 20
+            // Muro divisorio derecho del pasillo (separa pasillo de Sala de Reuniones y Formación)
+            CreateBox("Wall_PB_Corr_Right_1", bldgGroup.transform, new Vector3(2.2f, 1.9f, 2.5f), new Vector3(0.3f, 3.7f, 9f), mats["Mat_UTOP_Wall_Interior"]);
+            CreateBox("Wall_PB_Corr_Right_2", bldgGroup.transform, new Vector3(2.2f, 1.9f, 15f), new Vector3(0.3f, 3.7f, 10f), mats["Mat_UTOP_Wall_Interior"]);
+            // Muro divisorio entre Sala de Reuniones y Aula de Formación (Z = 8, X: 2.2 a 18)
+            CreateBox("Wall_PB_Meeting_Classroom", bldgGroup.transform, new Vector3(10f, 1.9f, 8f), new Vector3(16f, 3.7f, 0.3f), mats["Mat_UTOP_Wall_Interior"]);
+
+            // Muro divisorio izquierdo (separa Recepción / Espera y Baños)
+            CreateBox("Wall_PB_Corr_Left_1", bldgGroup.transform, new Vector3(-2.2f, 1.9f, 1.5f), new Vector3(0.3f, 3.7f, 7f), mats["Mat_UTOP_Wall_Interior"]);
+            CreateBox("Wall_PB_Corr_Left_2", bldgGroup.transform, new Vector3(-2.2f, 1.9f, 18f), new Vector3(0.3f, 3.7f, 6f), mats["Mat_UTOP_Wall_Interior"]);
+            // Muro Baños (SS.HH.) en fondo izquierdo (Z = 14, X: -18 a -2.2)
+            CreateBox("Wall_PB_Bathrooms", bldgGroup.transform, new Vector3(-10f, 1.9f, 14f), new Vector3(16f, 3.7f, 0.3f), mats["Mat_UTOP_Wall_Interior"]);
+
+            // 6. Muros Interiores Planta Alta (Y = 5.75m, Alto = 3.7m)
+            // Pasillo central PA
+            CreateBox("Wall_PA_Corr_Right_1", bldgGroup.transform, new Vector3(2.2f, 5.75f, 2.5f), new Vector3(0.3f, 3.7f, 9f), mats["Mat_UTOP_Wall_Interior"]);
+            CreateBox("Wall_PA_Corr_Right_2", bldgGroup.transform, new Vector3(2.2f, 5.75f, 15f), new Vector3(0.3f, 3.7f, 10f), mats["Mat_UTOP_Wall_Interior"]);
+            // Oficina de Mando (Jefatura) a la derecha frontal (Z = 8, X: 2.2 a 18)
+            CreateBox("Wall_PA_Command_Divide", bldgGroup.transform, new Vector3(10f, 5.75f, 8f), new Vector3(16f, 3.7f, 0.3f), mats["Mat_UTOP_Wall_Interior"]);
+
+            // Oficinas Administrativas a la izquierda frontal (Z: -2 a 8, X: -18 a -2.2)
+            CreateBox("Wall_PA_Admin_Front", bldgGroup.transform, new Vector3(-10f, 5.75f, 8f), new Vector3(16f, 3.7f, 0.3f), mats["Mat_UTOP_Wall_Interior"]);
+            // Sala de Descanso a la izquierda fondo (Z: 14 a 22, X: -18 a -2.2)
+            CreateBox("Wall_PA_Lounge_Divide", bldgGroup.transform, new Vector3(-10f, 5.75f, 14f), new Vector3(16f, 3.7f, 0.3f), mats["Mat_UTOP_Wall_Interior"]);
+        }
+
+        private static void BuildBalustrade(Transform parent, Vector3 pos, Vector3 size, Dictionary<string, Material> mats)
+        {
+            var rail = CreateBox("Safety_Balustrade", parent, pos, size, mats["Mat_UTOP_Glass"]);
+            // Pasamanos superior cromado
+            CreateBox("Handrail", rail.transform, pos + new Vector3(0, size.y * 0.5f + 0.05f, 0), new Vector3(size.x > size.z ? size.x : 0.08f, 0.06f, size.z > size.x ? size.z : 0.08f), mats["Mat_UTOP_Metal_Chrome"]);
+        }
+        #endregion
+
+        #region Mobiliario e Interiores
+        private static void BuildInteriorGroundFloor(Transform root, Dictionary<string, Material> mats)
+        {
+            var pbGroup = new GameObject("Interior_GroundFloor");
+            pbGroup.transform.SetParent(root, false);
+
+            // ----------------------------------------------------
+            // 1. RECEPCIÓN Y ATENCIÓN (X: -8 a -2.5, Z: 0 a 5)
+            // ----------------------------------------------------
+            var recDesk = CreateBox("Desk_Reception", pbGroup.transform, new Vector3(-5.5f, 0.55f, 1.8f), new Vector3(3.2f, 1.1f, 1.2f), mats["Mat_UTOP_Wood_Desk"]);
+            CreateBox("Desk_Counter_Top", recDesk.transform, new Vector3(-5.5f, 1.15f, 1.8f), new Vector3(3.4f, 0.08f, 1.3f), mats["Mat_UTOP_Concrete_Accent"]);
+            // Monitor y teclado en recepción
+            CreateBox("PC_Monitor", recDesk.transform, new Vector3(-5.5f, 1.4f, 1.9f), new Vector3(0.6f, 0.4f, 0.08f), mats["Mat_UTOP_Metal_Dark"]);
+            CreateBox("PC_Screen", recDesk.transform, new Vector3(-5.5f, 1.4f, 1.85f), new Vector3(0.55f, 0.35f, 0.02f), mats["Mat_UTOP_Screen_Tactical"]);
+            // Silla de recepcionista
+            BuildOfficeChair(pbGroup.transform, new Vector3(-5.5f, 0.45f, 2.7f), mats);
+
+            // Sala de Espera (X: -8 a -3, Z: -1 a 0.5)
+            BuildCouch(pbGroup.transform, new Vector3(-6.5f, 0.45f, -0.6f), mats);
+            var waitTable = CreateBox("Table_Waiting", pbGroup.transform, new Vector3(-4.5f, 0.25f, -0.6f), new Vector3(1.2f, 0.45f, 0.8f), mats["Mat_UTOP_Wood_Desk"]);
+
+            // Luminarias de Recepción
+            BuildCeilingLamp(pbGroup.transform, new Vector3(-5.5f, 3.65f, 1.8f), mats);
+
+            // ----------------------------------------------------
+            // 2. SALA DE REUNIONES TÁCTICAS (X: 3 a 17, Z: -1 a 7)
+            // ----------------------------------------------------
+            var meetTable = CreateBox("Table_Conference", pbGroup.transform, new Vector3(10f, 0.45f, 3.0f), new Vector3(6.5f, 0.85f, 2.2f), mats["Mat_UTOP_Wood_Desk"]);
+            // Sillas alrededor de la mesa
+            for (int i = 0; i < 4; i++)
+            {
+                float xOffset = -2.2f + (i * 1.45f);
+                BuildOfficeChair(pbGroup.transform, new Vector3(10f + xOffset, 0.45f, 1.4f), mats, 0f);
+                BuildOfficeChair(pbGroup.transform, new Vector3(10f + xOffset, 0.45f, 4.6f), mats, 180f);
+            }
+            BuildOfficeChair(pbGroup.transform, new Vector3(6.2f, 0.45f, 3.0f), mats, 90f);
+            BuildOfficeChair(pbGroup.transform, new Vector3(13.8f, 0.45f, 3.0f), mats, -90f);
+
+            // Pizarra / Pantalla Táctica en pared frontal
+            CreateBox("Whiteboard_Meeting", pbGroup.transform, new Vector3(10f, 2.1f, -1.75f), new Vector3(4.5f, 2.0f, 0.08f), mats["Mat_UTOP_Wall_Accent"]);
+            CreateBox("Screen_Meeting", pbGroup.transform, new Vector3(10f, 2.1f, -1.70f), new Vector3(4.2f, 1.8f, 0.04f), mats["Mat_UTOP_Screen_Tactical"]);
+
+            // Luminarias Sala de Reuniones
+            BuildCeilingLamp(pbGroup.transform, new Vector3(8.5f, 3.65f, 3.0f), mats);
+            BuildCeilingLamp(pbGroup.transform, new Vector3(11.5f, 3.65f, 3.0f), mats);
+
+            // ----------------------------------------------------
+            // 3. AULA DE FORMACIÓN ESPECIALIZADA (X: 3 a 17, Z: 9 a 21)
+            // ----------------------------------------------------
+            // Podio del instructor al fondo
+            var podium = CreateBox("Instructor_Podium", pbGroup.transform, new Vector3(10f, 0.6f, 10.5f), new Vector3(1.2f, 1.2f, 0.8f), mats["Mat_UTOP_Wood_Desk"]);
+            CreateBox("Screen_Classroom", pbGroup.transform, new Vector3(10f, 2.4f, 8.2f), new Vector3(5.5f, 2.2f, 0.08f), mats["Mat_UTOP_Screen_Tactical"]);
+
+            // Filas de pupitres para los participantes
+            for (int row = 0; row < 3; row++)
+            {
+                float zRow = 13.5f + (row * 2.5f);
+                for (int col = 0; col < 3; col++)
+                {
+                    float xCol = 6.2f + (col * 3.8f);
+                    var desk = CreateBox($"Desk_Student_{row}_{col}", pbGroup.transform, new Vector3(xCol, 0.42f, zRow), new Vector3(2.0f, 0.8f, 0.9f), mats["Mat_UTOP_Wood_Desk"]);
+                    BuildOfficeChair(pbGroup.transform, new Vector3(xCol, 0.45f, zRow + 0.8f), mats, 180f);
+                }
+            }
+
+            // Luminarias Aula
+            BuildCeilingLamp(pbGroup.transform, new Vector3(7.5f, 3.65f, 15f), mats);
+            BuildCeilingLamp(pbGroup.transform, new Vector3(12.5f, 3.65f, 15f), mats);
+
+            // Luminarias Pasillo PB
+            BuildCeilingLamp(pbGroup.transform, new Vector3(0, 3.65f, 2f), mats);
+            BuildCeilingLamp(pbGroup.transform, new Vector3(0, 3.65f, 8f), mats);
+            BuildCeilingLamp(pbGroup.transform, new Vector3(0, 3.65f, 14f), mats);
+        }
+
+        private static void BuildInteriorUpperFloor(Transform root, Dictionary<string, Material> mats)
+        {
+            var paGroup = new GameObject("Interior_UpperFloor");
+            paGroup.transform.SetParent(root, false);
+
+            // ----------------------------------------------------
+            // 1. OFICINA DE MANDO / JEFATURA (X: 3 a 17, Z: -1 a 7, Y: 3.9)
+            // ----------------------------------------------------
+            // Piso de madera noble ejecutiva
+            CreateBox("Floor_Command_Wood", paGroup.transform, new Vector3(10f, 3.96f, 3.0f), new Vector3(14f, 0.02f, 9f), mats["Mat_UTOP_Floor_Wood"]);
+
+            // Escritorio ejecutivo monumental de jefatura
+            var execDesk = CreateBox("Executive_Desk", paGroup.transform, new Vector3(10f, 4.45f, 2.0f), new Vector3(3.6f, 0.9f, 1.4f), mats["Mat_UTOP_Wood_Desk"]);
+            // Sillón de mando y sillones de visita
+            BuildExecutiveChair(paGroup.transform, new Vector3(10f, 4.45f, 1.0f), mats, 0f);
+            BuildOfficeChair(paGroup.transform, new Vector3(8.8f, 4.45f, 3.1f), mats, 180f);
+            BuildOfficeChair(paGroup.transform, new Vector3(11.2f, 4.45f, 3.1f), mats, 180f);
+
+            // Librero y archivadores de fondo
+            CreateBox("Bookcase_Command", paGroup.transform, new Vector3(10f, 5.6f, -1.6f), new Vector3(5.5f, 3.0f, 0.6f), mats["Mat_UTOP_Wood_Desk"]);
+
+            // Escudo / Placa institucional de pared
+            CreateBox("Command_Plaque", paGroup.transform, new Vector3(10f, 6.2f, 7.8f), new Vector3(2.2f, 1.4f, 0.08f), mats["Mat_UTOP_Gold_Brass"]);
+
+            // Luminaria Jefatura
+            BuildCeilingLamp(paGroup.transform, new Vector3(10f, 7.65f, 3.0f), mats);
+
+            // ----------------------------------------------------
+            // 2. OFICINAS ADMINISTRATIVAS (X: -17 a -3, Z: -1 a 7, Y: 3.9)
+            // ----------------------------------------------------
+            // 3 escritorios de analistas con PCs y cajoneras
+            for (int i = 0; i < 3; i++)
+            {
+                float x = -13.5f + (i * 4.2f);
+                var desk = CreateBox($"Admin_Desk_{i}", paGroup.transform, new Vector3(x, 4.4f, 2.5f), new Vector3(2.2f, 0.85f, 1.2f), mats["Mat_UTOP_Wood_Desk"]);
+                CreateBox($"Admin_PC_{i}", desk.transform, new Vector3(x, 5.1f, 2.5f), new Vector3(0.6f, 0.4f, 0.08f), mats["Mat_UTOP_Metal_Dark"]);
+                BuildOfficeChair(paGroup.transform, new Vector3(x, 4.4f, 1.4f), mats, 0f);
+            }
+            CreateBox("Archive_Cabinet_Row", paGroup.transform, new Vector3(-16.5f, 5.2f, 3.0f), new Vector3(0.8f, 2.4f, 6.0f), mats["Mat_UTOP_Metal_Dark"]);
+
+            // Luminarias Planta Alta
+            BuildCeilingLamp(paGroup.transform, new Vector3(-10f, 7.65f, 3.0f), mats);
+            BuildCeilingLamp(paGroup.transform, new Vector3(0f, 7.65f, 2.0f), mats);
+            BuildCeilingLamp(paGroup.transform, new Vector3(0f, 7.65f, 14.0f), mats);
+        }
+
+        private static void BuildStaircase(Transform root, Dictionary<string, Material> mats)
+        {
+            var stairsGroup = new GameObject("Staircase_Central");
+            stairsGroup.transform.SetParent(root, false);
+
+            // Escalera de acceso: de X: -5f a -2.5f, subiendo de Z = 5f hacia Z = 12.5f
+            // Escalones visuales con contrahuella y peldaño
+            int stepCount = 18;
+            float totalHeight = 3.9f;
+            float stepHeight = totalHeight / stepCount; // ~0.21m
+            float stepLength = 7.5f / stepCount; // ~0.41m
+
+            for (int i = 0; i < stepCount; i++)
+            {
+                float y = (i + 0.5f) * stepHeight;
+                float z = 5.2f + (i * stepLength);
+                var step = CreateBox($"Step_{i}", stairsGroup.transform, new Vector3(-3.8f, y, z), new Vector3(2.8f, stepHeight, stepLength * 1.15f), mats["Mat_UTOP_Concrete_Accent"]);
+            }
+
+            // RAMPA FÍSICA INVISIBLE: Para que el CharacterController suba y baje suavemente sin tropezar
+            var rampColGo = new GameObject("Stairs_Physics_Ramp");
+            rampColGo.transform.SetParent(stairsGroup.transform, false);
+            // Centro de la rampa
+            rampColGo.transform.position = new Vector3(-3.8f, totalHeight * 0.5f, 5.2f + (7.5f * 0.5f));
+            // Ángulo de inclinación de la rampa
+            float angle = Mathf.Atan2(totalHeight, 7.5f) * Mathf.Rad2Deg;
+            rampColGo.transform.rotation = Quaternion.Euler(-angle, 0, 0);
+
+            var boxCol = rampColGo.AddComponent<BoxCollider>();
+            float rampLength = Mathf.Sqrt((totalHeight * totalHeight) + (7.5f * 7.5f));
+            boxCol.size = new Vector3(2.9f, 0.1f, rampLength);
+
+            // Barandilla de escalera
+            var handrail = CreateBox("Stairs_Handrail", stairsGroup.transform, new Vector3(-2.3f, (totalHeight * 0.5f) + 0.95f, 5.2f + (7.5f * 0.5f)), new Vector3(0.08f, 0.9f, rampLength), mats["Mat_UTOP_Metal_Chrome"]);
+            handrail.transform.rotation = Quaternion.Euler(-angle, 0, 0);
+        }
+        #endregion
+
+        #region Señalización y Ayudas
+        private static void BuildSignage(Transform root, Dictionary<string, Material> mats)
+        {
+            var signGroup = new GameObject("Signage_Institutional");
+            signGroup.transform.SetParent(root, false);
+
+            // Letrero fachada principal exterior
+            CreateSignPlate("Sign_Exterior_Facade", signGroup.transform, new Vector3(0, 6.8f, -2.25f), new Vector3(9.5f, 1.2f, 0.1f), mats["Mat_UTOP_Concrete_Accent"]);
+
+            // Placas de ambientes interiores
+            CreateSignPlate("Sign_Reception", signGroup.transform, new Vector3(-2.4f, 2.5f, 1.5f), new Vector3(1.2f, 0.35f, 0.05f), mats["Mat_UTOP_Gold_Brass"]);
+            CreateSignPlate("Sign_MeetingRoom", signGroup.transform, new Vector3(2.4f, 2.5f, 2.5f), new Vector3(1.4f, 0.35f, 0.05f), mats["Mat_UTOP_Gold_Brass"]);
+            CreateSignPlate("Sign_Classroom", signGroup.transform, new Vector3(2.4f, 2.5f, 12f), new Vector3(1.4f, 0.35f, 0.05f), mats["Mat_UTOP_Gold_Brass"]);
+            CreateSignPlate("Sign_Restrooms", signGroup.transform, new Vector3(-2.4f, 2.5f, 16f), new Vector3(1.2f, 0.35f, 0.05f), mats["Mat_UTOP_Gold_Brass"]);
+            CreateSignPlate("Sign_CommandOffice", signGroup.transform, new Vector3(2.4f, 6.4f, 2.5f), new Vector3(1.5f, 0.35f, 0.05f), mats["Mat_UTOP_Gold_Brass"]);
+        }
+
+        private static void CreateSignPlate(string name, Transform parent, Vector3 pos, Vector3 size, Material mat)
+        {
+            var plate = CreateBox(name, parent, pos, size, mat);
+        }
+        #endregion
+
+        #region Puntos de Interacción
+        private static void BuildInteractionZones(Transform root, Dictionary<string, Material> mats)
+        {
+            var zonesGroup = new GameObject("Interaction_Zones");
+            zonesGroup.transform.SetParent(root, false);
+
+            // 1. Recepción
+            CreateInteractionPoint(
+                zonesGroup.transform,
+                "Zone_Reception",
+                new Vector3(-4.0f, 0.5f, 1.8f),
+                2.4f,
+                "Puesto de Control y Recepción",
+                "Recepción principal de la Base UTOP.\n\nAquí se realiza el registro obligatorio del personal que ingresa a las instalaciones, verificación de credenciales y asignación de áreas operativas.",
+                "Consultar Libro de Novedades"
+            );
+
+            // 2. Sala de Reuniones
+            CreateInteractionPoint(
+                zonesGroup.transform,
+                "Zone_MeetingRoom",
+                new Vector3(6.5f, 0.5f, 3.0f),
+                2.8f,
+                "Sala de Reuniones Tácticas",
+                "Espacio de coordinación y análisis táctico.\n\nLos oficiales y jefes de escuadra planifican aquí los despliegues preventivos, evalúan rutas de contingencia y analizan los informes de situación de los bloqueos urbanos.",
+                "Revisar Orden del Día"
+            );
+
+            // 3. Aula de Formación
+            CreateInteractionPoint(
+                zonesGroup.transform,
+                "Zone_Classroom",
+                new Vector3(10f, 0.5f, 11.0f),
+                3.0f,
+                "Aula de Formación Especializada",
+                "Centro de instrucción y capacitación de la UTOP.\n\nEn este recinto se dictan las materias de Derechos Humanos aplicados a la función policial, resolución pacífica de conflictos y técnicas no letales de contención.",
+                "Examinar Manual de Formación"
+            );
+
+            // 4. Oficina de Mando
+            CreateInteractionPoint(
+                zonesGroup.transform,
+                "Zone_CommandOffice",
+                new Vector3(10f, 4.45f, 3.5f),
+                2.8f,
+                "Jefatura de Operaciones UTOP",
+                "Área de acceso restringido.\n\nDespacho de la Jefatura Operativa. Solo personal autorizado con clave de mando puede ingresar para recibir órdenes directas de despliegue y autorización de recursos tácticos.",
+                "Solicitar Audiencia con el Mando"
+            );
+        }
+
+        private static void CreateInteractionPoint(
+            Transform parent,
+            string name,
+            Vector3 pos,
+            float radius,
+            string title,
+            string desc,
+            string prompt)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.position = pos;
+
+            var colTrigger = go.AddComponent<SphereCollider>();
+            colTrigger.isTrigger = true;
+            colTrigger.radius = radius;
+
+            var zone = go.AddComponent<InteractableZone>();
+            zone.zoneTitle = title;
+            zone.interactionDescription = desc;
+            zone.actionPrompt = prompt;
+            zone.interactionRadius = radius;
+
+            // Marcador visual sutil en el suelo (anillo/halo)
+            var marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            marker.name = "Zone_Marker";
+            marker.transform.SetParent(go.transform, false);
+            marker.transform.localPosition = new Vector3(0, 0.02f, 0);
+            marker.transform.localScale = new Vector3(radius * 0.85f, 0.01f, radius * 0.85f);
+            var col = marker.GetComponent<Collider>();
+            if (col != null) Object.DestroyImmediate(col);
+
+            var rend = marker.GetComponent<MeshRenderer>();
+            var markerMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            markerMat.color = new Color(0.1f, 0.8f, 1.0f, 0.25f);
+            if (markerMat.HasProperty("_EmissionColor"))
+            {
+                markerMat.EnableKeyword("_EMISSION");
+                markerMat.SetColor("_EmissionColor", new Color(0.1f, 0.8f, 1.0f) * 0.8f);
+            }
+            rend.sharedMaterial = markerMat;
+        }
+        #endregion
+
+        #region Jugador y Cámara
+        private static GameObject BuildPlayer(Transform root, Dictionary<string, Material> mats)
+        {
+            // Posición de spawn: Patio frontal exterior (Z = -14, X = 0), mirando hacia la fachada (Z = 0)
+            Vector3 spawnPos = new Vector3(0, 0.05f, -14f);
+            Quaternion spawnRot = Quaternion.identity;
+
+            var playerGo = new GameObject("Player_Oficial");
+            playerGo.transform.position = spawnPos;
+            playerGo.transform.rotation = spawnRot;
+            playerGo.tag = "Player";
+
+            // CharacterController para movimiento con colisiones y suelo
+            var cc = playerGo.AddComponent<CharacterController>();
+            cc.height = 1.85f;
+            cc.radius = 0.32f;
+            cc.center = new Vector3(0, 0.925f, 0);
+            cc.stepOffset = 0.35f; // Permite subir escalones con soltura
+            cc.slopeLimit = 45f;
+
+            // Construir modelo anatómico articulado completo
+            var humanoid = HumanoidModelBuilder.BuildHumanoid(
+                playerGo,
+                mats["Mat_UTOP_Concrete_Accent"], // Cuerpo azul oscuro / grafito
+                mats["Mat_UTOP_Metal_Dark"],       // Articulaciones
+                mats["Mat_UTOP_Gold_Brass"],       // Acento dorado
+                mats["Mat_UTOP_Screen_Tactical"]   // Visor
+            );
+
+            // Animador procedural biomecánico
+            var animator = playerGo.AddComponent<ProceduralHumanoidAnimator>();
+            animator.humanoid = humanoid;
+            animator.CaptureInitialPoses();
+
+            // Controlador del jugador WASD + Shift
+            var pc = playerGo.AddComponent<PlayerController>();
+
+            // Configurar Cámara Orbital 3ra Persona
+            var camGo = new GameObject("Main Camera");
+            camGo.tag = "MainCamera";
+            var cam = camGo.AddComponent<Camera>();
+            cam.nearClipPlane = 0.1f;
+            cam.farClipPlane = 1000f;
+            camGo.AddComponent<AudioListener>();
+            camGo.AddComponent<UniversalAdditionalCameraData>();
+
+            var tpCam = camGo.AddComponent<ThirdPersonCamera>();
+            tpCam.target = playerGo.transform;
+            tpCam.distance = 3.8f;
+            tpCam.targetOffset = new Vector3(0, 1.4f, 0);
+
+            pc.cameraTransform = camGo.transform;
+            camGo.transform.position = spawnPos + new Vector3(0, 2.2f, -3.8f);
+            camGo.transform.LookAt(spawnPos + new Vector3(0, 1.4f, 0));
+
+            return playerGo;
+        }
+        #endregion
+
+        #region HUD de Simulación e Interacción
+        private static void BuildUIHierarchy(GameObject player)
+        {
+            var canvasGo = new GameObject("Simulation_Canvas");
+            var canvas = canvasGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 100;
+
+            var scaler = canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920, 1080);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
+
+            canvasGo.AddComponent<GraphicRaycaster>();
+
+            // EventSystem si no existe
+            if (Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+            {
+                var esGo = new GameObject("EventSystem");
+                esGo.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                esGo.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+            }
+
+            // Fuente TextMeshPro
+            var fontAsset = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+            if (fontAsset == null)
+            {
+                fontAsset = TMP_Settings.defaultFontAsset;
+            }
+
+            // 1. BANNER SUPERIOR DE INFORMACIÓN DEL OFICIAL (Esquina Superior Izquierda)
+            var topBanner = new GameObject("TopBanner_OfficerInfo", typeof(RectTransform), typeof(Image));
+            topBanner.transform.SetParent(canvasGo.transform, false);
+            var tbRect = topBanner.GetComponent<RectTransform>();
+            tbRect.anchorMin = new Vector2(0, 1);
+            tbRect.anchorMax = new Vector2(0, 1);
+            tbRect.pivot = new Vector2(0, 1);
+            tbRect.anchoredPosition = new Vector2(25, -25);
+            tbRect.sizeDelta = new Vector2(440, 100);
+            var tbImg = topBanner.GetComponent<Image>();
+            tbImg.color = new Color(0.06f, 0.08f, 0.11f, 0.88f);
+
+            // Borde estético izquierdo
+            var borderL = new GameObject("Accent_Border", typeof(RectTransform), typeof(Image));
+            borderL.transform.SetParent(topBanner.transform, false);
+            var bRect = borderL.GetComponent<RectTransform>();
+            bRect.anchorMin = new Vector2(0, 0);
+            bRect.anchorMax = new Vector2(0, 1);
+            bRect.pivot = new Vector2(0, 0.5f);
+            bRect.sizeDelta = new Vector2(4, 0);
+            borderL.GetComponent<Image>().color = new Color(0f, 0.85f, 1f, 0.9f);
+
+            var titleText = CreateText(topBanner.transform, "Title", "SIMULADOR DE BLOQUEOS — BASE UTOP", 13, FontStyles.Bold, new Color(0f, 0.85f, 1f), fontAsset);
+            titleText.rectTransform.anchoredPosition = new Vector2(18, -16);
+
+            var officerText = CreateText(topBanner.transform, "OfficerName", "Subt. Oficial en Prácticas", 16, FontStyles.Bold, Color.white, fontAsset);
+            officerText.rectTransform.anchoredPosition = new Vector2(18, -42);
+
+            var codeText = CreateText(topBanner.transform, "OfficerCode", "POL-2026-UTOP | Sección Instrucción", 12, FontStyles.Normal, new Color(0.7f, 0.75f, 0.8f), fontAsset);
+            codeText.rectTransform.anchoredPosition = new Vector2(18, -70);
+
+            // 2. BOTÓN DE SALIDA AL MENÚ (Esquina Superior Derecha)
+            var returnBtnGo = new GameObject("Btn_ReturnMenu", typeof(RectTransform), typeof(Image), typeof(Button));
+            returnBtnGo.transform.SetParent(canvasGo.transform, false);
+            var rbRect = returnBtnGo.GetComponent<RectTransform>();
+            rbRect.anchorMin = new Vector2(1, 1);
+            rbRect.anchorMax = new Vector2(1, 1);
+            rbRect.pivot = new Vector2(1, 1);
+            rbRect.anchoredPosition = new Vector2(-25, -25);
+            rbRect.sizeDelta = new Vector2(170, 42);
+            returnBtnGo.GetComponent<Image>().color = new Color(0.12f, 0.15f, 0.20f, 0.9f);
+
+            var btnText = CreateText(returnBtnGo.transform, "Text", "Volver al Menú", 14, FontStyles.Bold, Color.white, fontAsset);
+            btnText.alignment = TextAlignmentOptions.Center;
+            btnText.rectTransform.anchorMin = Vector2.zero;
+            btnText.rectTransform.anchorMax = Vector2.one;
+            btnText.rectTransform.sizeDelta = Vector2.zero;
+            btnText.rectTransform.anchoredPosition = Vector2.zero;
+
+            // Script SimulationBaseHUD
+            var baseHUD = canvasGo.AddComponent<SimulationBaseHUD>();
+            baseHUD.rankAndNameText = officerText;
+            baseHUD.codeAndUnitText = codeText;
+            baseHUD.returnMenuButton = returnBtnGo.GetComponent<Button>();
+
+            // 3. PROMPT DE INTERACCIÓN FLOTANTE (Abajo Centro)
+            var promptGo = new GameObject("Prompt_Container", typeof(RectTransform), typeof(Image));
+            promptGo.transform.SetParent(canvasGo.transform, false);
+            var pRect = promptGo.GetComponent<RectTransform>();
+            pRect.anchorMin = new Vector2(0.5f, 0);
+            pRect.anchorMax = new Vector2(0.5f, 0);
+            pRect.pivot = new Vector2(0.5f, 0);
+            pRect.anchoredPosition = new Vector2(0, 50);
+            pRect.sizeDelta = new Vector2(650, 52);
+            promptGo.GetComponent<Image>().color = new Color(0.05f, 0.07f, 0.10f, 0.92f);
+
+            var pText = CreateText(promptGo.transform, "Prompt_Text", "Presiona [E] para interactuar", 15, FontStyles.Normal, Color.white, fontAsset);
+            pText.alignment = TextAlignmentOptions.Center;
+            pText.rectTransform.anchorMin = Vector2.zero;
+            pText.rectTransform.anchorMax = Vector2.one;
+            pText.rectTransform.sizeDelta = Vector2.zero;
+            pText.rectTransform.anchoredPosition = Vector2.zero;
+
+            // 4. MODAL DETALLADO DE INFORMACIÓN TÁCTICA (Centro de pantalla)
+            var modalGo = new GameObject("Modal_Container", typeof(RectTransform), typeof(Image));
+            modalGo.transform.SetParent(canvasGo.transform, false);
+            var mRect = modalGo.GetComponent<RectTransform>();
+            mRect.anchorMin = new Vector2(0.5f, 0.5f);
+            mRect.anchorMax = new Vector2(0.5f, 0.5f);
+            mRect.pivot = new Vector2(0.5f, 0.5f);
+            mRect.sizeDelta = new Vector2(680, 420);
+            modalGo.GetComponent<Image>().color = new Color(0.08f, 0.10f, 0.13f, 0.98f);
+
+            // Cabecera modal
+            var headerGo = new GameObject("Modal_Header", typeof(RectTransform), typeof(Image));
+            headerGo.transform.SetParent(modalGo.transform, false);
+            var hRect = headerGo.GetComponent<RectTransform>();
+            hRect.anchorMin = new Vector2(0, 1);
+            hRect.anchorMax = new Vector2(1, 1);
+            hRect.pivot = new Vector2(0.5f, 1);
+            hRect.sizeDelta = new Vector2(0, 54);
+            headerGo.GetComponent<Image>().color = new Color(0.12f, 0.15f, 0.20f, 1f);
+
+            var modalTitle = CreateText(headerGo.transform, "ModalTitle", "INFORME TÁCTICO DE ZONA", 16, FontStyles.Bold, new Color(0f, 0.85f, 1f), fontAsset);
+            modalTitle.alignment = TextAlignmentOptions.Center;
+            modalTitle.rectTransform.anchorMin = Vector2.zero;
+            modalTitle.rectTransform.anchorMax = Vector2.one;
+            modalTitle.rectTransform.sizeDelta = Vector2.zero;
+            modalTitle.rectTransform.anchoredPosition = Vector2.zero;
+
+            var modalBody = CreateText(modalGo.transform, "ModalBody", "Descripción de la zona...", 15, FontStyles.Normal, new Color(0.9f, 0.92f, 0.95f), fontAsset);
+            modalBody.rectTransform.anchorMin = new Vector2(0, 0);
+            modalBody.rectTransform.anchorMax = new Vector2(1, 1);
+            modalBody.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            modalBody.rectTransform.anchoredPosition = new Vector2(0, -10);
+            modalBody.rectTransform.sizeDelta = new Vector2(-60, -130);
+
+            // Botón cerrar modal
+            var closeBtnGo = new GameObject("Btn_CloseModal", typeof(RectTransform), typeof(Image), typeof(Button));
+            closeBtnGo.transform.SetParent(modalGo.transform, false);
+            var cRect = closeBtnGo.GetComponent<RectTransform>();
+            cRect.anchorMin = new Vector2(0.5f, 0);
+            cRect.anchorMax = new Vector2(0.5f, 0);
+            cRect.pivot = new Vector2(0.5f, 0);
+            cRect.anchoredPosition = new Vector2(0, 20);
+            cRect.sizeDelta = new Vector2(200, 42);
+            closeBtnGo.GetComponent<Image>().color = new Color(0.18f, 0.24f, 0.32f, 1f);
+
+            var closeBtnText = CreateText(closeBtnGo.transform, "CloseText", "[E] / [ESC] Cerrar", 14, FontStyles.Bold, Color.white, fontAsset);
+            closeBtnText.alignment = TextAlignmentOptions.Center;
+            closeBtnText.rectTransform.anchorMin = Vector2.zero;
+            closeBtnText.rectTransform.anchorMax = Vector2.one;
+            closeBtnText.rectTransform.sizeDelta = Vector2.zero;
+            closeBtnText.rectTransform.anchoredPosition = Vector2.zero;
+
+            // Script InteractionHUD
+            var interactionHUD = canvasGo.AddComponent<InteractionHUD>();
+            interactionHUD.promptContainer = promptGo;
+            interactionHUD.promptText = pText;
+            interactionHUD.modalContainer = modalGo;
+            interactionHUD.modalTitleText = modalTitle;
+            interactionHUD.modalBodyText = modalBody;
+            interactionHUD.modalCloseButton = closeBtnGo.GetComponent<Button>();
+
+            // Guía de controles en esquina inferior derecha
+            var controlsGuideGo = new GameObject("Controls_Guide", typeof(RectTransform), typeof(Image));
+            controlsGuideGo.transform.SetParent(canvasGo.transform, false);
+            var cgRect = controlsGuideGo.GetComponent<RectTransform>();
+            cgRect.anchorMin = new Vector2(1, 0);
+            cgRect.anchorMax = new Vector2(1, 0);
+            cgRect.pivot = new Vector2(1, 0);
+            cgRect.anchoredPosition = new Vector2(-25, 25);
+            cgRect.sizeDelta = new Vector2(280, 110);
+            controlsGuideGo.GetComponent<Image>().color = new Color(0.06f, 0.08f, 0.11f, 0.85f);
+
+            var guideText = CreateText(controlsGuideGo.transform, "GuideText",
+                "<b>CONTROLES TÁCTICOS:</b>\n" +
+                "• <b>WASD:</b> Desplazamiento\n" +
+                "• <b>Shift:</b> Correr (Sprint)\n" +
+                "• <b>Ratón:</b> Rotar visión\n" +
+                "• <b>E:</b> Interactuar con zonas\n" +
+                "• <b>Esc:</b> Liberar cursor",
+                11, FontStyles.Normal, new Color(0.85f, 0.88f, 0.92f), fontAsset);
+            guideText.rectTransform.anchoredPosition = new Vector2(15, -12);
+        }
+        #endregion
+
+        #region Helpers de Geometría
+        private static GameObject CreateBox(string name, Transform parent, Vector3 pos, Vector3 size, Material mat)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = name;
+            go.transform.SetParent(parent, false);
+            go.transform.position = pos;
+            go.transform.localScale = size;
+            go.GetComponent<MeshRenderer>().sharedMaterial = mat;
+            return go;
+        }
+
+        private static GameObject CreateCylinder(string name, Transform parent, Vector3 pos, Vector3 scale, Material mat)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = name;
+            go.transform.SetParent(parent, false);
+            go.transform.position = pos;
+            go.transform.localScale = scale;
+            go.GetComponent<MeshRenderer>().sharedMaterial = mat;
+            return go;
+        }
+
+        private static void BuildCeilingLamp(Transform parent, Vector3 pos, Dictionary<string, Material> mats)
+        {
+            var fixture = CreateBox("CeilingLamp", parent, pos, new Vector3(1.2f, 0.08f, 0.4f), mats["Mat_UTOP_Metal_Dark"]);
+            CreateBox("Bulb_Panel", fixture.transform, pos - new Vector3(0, 0.04f, 0), new Vector3(1.0f, 0.03f, 0.28f), mats["Mat_UTOP_Ceiling_Light"]);
+
+            var lightObj = new GameObject("PointLight");
+            lightObj.transform.SetParent(fixture.transform, false);
+            lightObj.transform.position = pos - new Vector3(0, 0.2f, 0);
+            var l = lightObj.AddComponent<Light>();
+            l.type = LightType.Point;
+            l.range = 8.5f;
+            l.intensity = 1.35f;
+            l.color = new Color(1f, 0.98f, 0.94f);
+        }
+
+        private static void BuildOfficeChair(Transform parent, Vector3 pos, Dictionary<string, Material> mats, float rotY = 0f)
+        {
+            var chair = new GameObject("Office_Chair");
+            chair.transform.SetParent(parent, false);
+            chair.transform.position = pos;
+            chair.transform.rotation = Quaternion.Euler(0, rotY, 0);
+
+            // Asiento
+            CreateBox("Seat", chair.transform, pos + new Vector3(0, 0.45f, 0), new Vector3(0.55f, 0.08f, 0.55f), mats["Mat_UTOP_Fabric_Grey"]);
+            // Respaldo
+            CreateBox("Backrest", chair.transform, pos + new Vector3(0, 0.82f, -0.24f), new Vector3(0.5f, 0.65f, 0.08f), mats["Mat_UTOP_Fabric_Grey"]);
+            // Pata central y ruedas
+            CreateCylinder("Leg", chair.transform, pos + new Vector3(0, 0.22f, 0), new Vector3(0.08f, 0.22f, 0.08f), mats["Mat_UTOP_Metal_Dark"]);
+        }
+
+        private static void BuildExecutiveChair(Transform parent, Vector3 pos, Dictionary<string, Material> mats, float rotY = 0f)
+        {
+            var chair = new GameObject("Executive_Chair");
+            chair.transform.SetParent(parent, false);
+            chair.transform.position = pos;
+            chair.transform.rotation = Quaternion.Euler(0, rotY, 0);
+
+            // Asiento de piel
+            CreateBox("Seat", chair.transform, pos + new Vector3(0, 0.48f, 0), new Vector3(0.68f, 0.12f, 0.65f), mats["Mat_UTOP_Fabric_Navy"]);
+            // Respaldo alto
+            CreateBox("Backrest", chair.transform, pos + new Vector3(0, 1.0f, -0.28f), new Vector3(0.64f, 0.95f, 0.12f), mats["Mat_UTOP_Fabric_Navy"]);
+            // Apoyabrazos
+            CreateBox("Arm_L", chair.transform, pos + new Vector3(-0.36f, 0.72f, 0), new Vector3(0.08f, 0.24f, 0.45f), mats["Mat_UTOP_Metal_Dark"]);
+            CreateBox("Arm_R", chair.transform, pos + new Vector3(0.36f, 0.72f, 0), new Vector3(0.08f, 0.24f, 0.45f), mats["Mat_UTOP_Metal_Dark"]);
+        }
+
+        private static void BuildCouch(Transform parent, Vector3 pos, Dictionary<string, Material> mats)
+        {
+            var couch = new GameObject("Waiting_Couch");
+            couch.transform.SetParent(parent, false);
+            couch.transform.position = pos;
+
+            CreateBox("Couch_Base", couch.transform, pos + new Vector3(0, 0.22f, 0), new Vector3(2.4f, 0.44f, 0.85f), mats["Mat_UTOP_Fabric_Navy"]);
+            CreateBox("Couch_Back", couch.transform, pos + new Vector3(0, 0.65f, -0.35f), new Vector3(2.4f, 0.5f, 0.22f), mats["Mat_UTOP_Fabric_Navy"]);
+            CreateBox("Couch_Arm_L", couch.transform, pos + new Vector3(-1.25f, 0.45f, 0), new Vector3(0.18f, 0.35f, 0.85f), mats["Mat_UTOP_Fabric_Navy"]);
+            CreateBox("Couch_Arm_R", couch.transform, pos + new Vector3(1.25f, 0.45f, 0), new Vector3(0.18f, 0.35f, 0.85f), mats["Mat_UTOP_Fabric_Navy"]);
+        }
+
+        private static TextMeshProUGUI CreateText(Transform parent, string name, string content, float size, FontStyles style, Color color, TMP_FontAsset font)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(TextMeshProUGUI));
+            go.transform.SetParent(parent, false);
+            var rect = go.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0, 1);
+            rect.anchorMax = new Vector2(0, 1);
+            rect.pivot = new Vector2(0, 1);
+
+            var tmp = go.GetComponent<TextMeshProUGUI>();
+            if (font != null) tmp.font = font;
+            tmp.text = content;
+            tmp.fontSize = size;
+            tmp.fontStyle = style;
+            tmp.color = color;
+            tmp.extraPadding = true;
+            return tmp;
+        }
+        #endregion
+
+        #region Build Settings
+        private static void UpdateBuildSettings()
+        {
+            var scenes = new List<EditorBuildSettingsScene>
+            {
+                new EditorBuildSettingsScene("Assets/_Project/Scenes/MainMenu/MainMenu.unity", true),
+                new EditorBuildSettingsScene("Assets/_Project/Scenes/BaseUTOP/BaseUTOP.unity", true),
+                new EditorBuildSettingsScene("Assets/Scenes/SampleScene.unity", true)
+            };
+            EditorBuildSettings.scenes = scenes.ToArray();
+            Debug.Log("<color=green>[BaseUTOP] Build Settings actualizado: 0. MainMenu, 1. BaseUTOP, 2. SampleScene.</color>");
+        }
+        #endregion
+    }
+}
+#endif

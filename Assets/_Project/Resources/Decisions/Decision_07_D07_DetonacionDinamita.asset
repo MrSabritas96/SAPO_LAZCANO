@@ -1,0 +1,104 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab39acaa91aecb945b15e65e0081ac20, type: 3}
+  m_Name: Decision_07_D07_DetonacionDinamita
+  m_EditorClassIdentifier: Assembly-CSharp::SimuladorBloqueos.Decisions.DecisionData
+  decisionId: D07_DetonacionDinamita
+  order: 7
+  stageName: "Detonaci\xF3n de dinamita"
+  context: "\xA1ALERTA CR\xCDTICA EN CALLE JUN\xCDN! Uno de los mineros bloqueadores enciende y arroja un cachorro de dinamita hacia la calzada frente al ingreso de la UTOP. La onda expansiva retumba entre las fachadas."
+  question: "\xBFQu\xE9 acci\xF3n t\xE1ctica inmediata ordenas ante la detonaci\xF3n de dinamita frente al recinto?"
+  kind: 0
+  shuffleOptions: 1
+  primaryCriterion: 0
+  hasSecondaryCriterion: 1
+  secondaryCriterion: 1
+  secondaryShare: 0.3
+  options:
+  - id: D07_EXC
+    text: "Ordenar repliegue t\xE1ctico inmediato a cobertura estructural tras los muros del p\xF3rtico, ampliar la distancia de seguridad, alertar a transe\xFAntes y registrar al autor desde Observaci\xF3n."
+    classification: 0
+    score: 100
+    immediateConsequence: "Ning\xFAn efectivo ni civil resulta alcanzado por la onda expansiva; se preserva la integridad f\xEDsica y se documenta el hecho."
+    variableEffects:
+    - variable: 5
+      delta: 14
+    - variable: 1
+      delta: 12
+    - variable: 6
+      delta: -6
+    deferredConsequences: []
+    setFlags:
+    - D07_BLAST_CONTAINED
+    criticalViolation: 0
+    reactionTag: D07_DYNAMITE_SAFE
+    numericValue: 0
+  - id: D07_GOOD
+    text: "Mantener al personal agazapado tras la l\xEDnea de escudos dentro del umbral del garaje y reportar la detonaci\xF3n por radio."
+    classification: 1
+    score: 86
+    immediateConsequence: "Se evita da\xF1o directo al personal policial, aunque la proximidad al umbral mantiene cierta exposici\xF3n ac\xFAstica."
+    variableEffects:
+    - variable: 5
+      delta: 6
+    - variable: 1
+      delta: 6
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 0
+    reactionTag: D07_DYNAMITE_HOLD
+    numericValue: 0
+  - id: D07_MOD
+    text: "Permanecer est\xE1ticos en la acera exterior sin buscar cobertura estructural ni despejar el radio de detonaci\xF3n."
+    classification: 2
+    score: 58
+    immediateConsequence: El personal queda expuesto al aturdimiento por onda expansiva y esquirlas secundarias sobre el asfalto.
+    variableEffects:
+    - variable: 5
+      delta: -14
+    - variable: 1
+      delta: -12
+    - variable: 6
+      delta: 10
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 0
+    reactionTag: D07_DYNAMITE_EXPOSED
+    numericValue: 0
+  - id: D07_GRAVE
+    text: "Ordenar una carga frontal inmediata en masa hacia el punto exacto donde caen los explosivos sin cobertura ni evaluaci\xF3n de riesgo."
+    classification: 3
+    score: 30
+    immediateConsequence: "Exposici\xF3n directa a la detonaci\xF3n: la orden imprudente causa da\xF1os por onda expansiva y agrava la violencia en la v\xEDa p\xFAblica."
+    variableEffects:
+    - variable: 5
+      delta: -28
+    - variable: 1
+      delta: -22
+    - variable: 6
+      delta: 22
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 1
+    reactionTag: D07_DYNAMITE_CHARGE
+    numericValue: 0
+  skipConditions: []
+  contextModifiers:
+  - condition:
+      kind: 0
+      flag: D03_WEAK_OBS_COMM
+      variable: 0
+      threshold: 0
+    addedContext: "Debido a la escasa dotaci\xF3n asignada a Observaci\xF3n en la Decisi\xF3n 3, el lanzamiento del explosivo fue advertido con pocos segundos de anticipaci\xF3n."
+    topOptionsScoreDelta: -5
+    effectsOnShow: []
+  preEventTag: 

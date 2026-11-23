@@ -1,0 +1,88 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab39acaa91aecb945b15e65e0081ac20, type: 3}
+  m_Name: Decision_05_D05_VerificacionPrevia
+  m_EditorClassIdentifier: Assembly-CSharp::SimuladorBloqueos.Decisions.DecisionData
+  decisionId: D05_VerificacionPrevia
+  order: 5
+  stageName: "Verificaci\xF3n previa a la salida"
+  context: El contingente ya equipado forma en el Patio de Honor frente al emblema institucional de la UTOP antes de tomar posiciones hacia el acceso vehicular.
+  question: "\xBFQu\xE9 procedimiento de verificaci\xF3n ejecutas antes de autorizar el despliegue hacia el p\xF3rtico?"
+  kind: 0
+  shuffleOptions: 1
+  primaryCriterion: 3
+  hasSecondaryCriterion: 1
+  secondaryCriterion: 4
+  secondaryShare: 0.4
+  options:
+  - id: D05_EXC
+    text: "Pasar revista f\xEDsica de sujeci\xF3n de cascos, estado de escudos, identificaci\xF3n visible de cada efectivo y recordar la prohibici\xF3n de actuar de forma aislada."
+    classification: 0
+    score: 100
+    immediateConsequence: "La tropa adopta posici\xF3n de firmes y saluda al un\xEDsono; se corrigen ajustes de equipo y se refuerza la disciplina t\xE1ctica."
+    variableEffects:
+    - variable: 4
+      delta: 12
+    - variable: 1
+      delta: 10
+    deferredConsequences: []
+    setFlags:
+    - D05_CHECKED
+    criticalViolation: 0
+    reactionTag: D05_VERIFY_EXCELLENT
+    numericValue: 0
+  - id: D05_GOOD
+    text: "Realizar un conteo visual r\xE1pido por filas y confirmar verbalmente con los jefes de escuadra que el equipo est\xE1 completo."
+    classification: 1
+    score: 86
+    immediateConsequence: "Verificaci\xF3n funcional que permite pasar a los puestos con orden aceptable."
+    variableEffects:
+    - variable: 4
+      delta: 6
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 0
+    reactionTag: D05_VERIFY_GOOD
+    numericValue: 0
+  - id: D05_MOD
+    text: "Omitir la revista de equipo y enviar a las escuadras directamente al p\xF3rtico sin comprobar correas ni radios."
+    classification: 2
+    score: 62
+    immediateConsequence: Algunos efectivos llegan al puesto con visores mal ajustados y sin haber probado su canal de enlace.
+    variableEffects:
+    - variable: 4
+      delta: -10
+    - variable: 2
+      delta: -8
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 0
+    reactionTag: D05_VERIFY_SKIPPED
+    numericValue: 0
+  - id: D05_GRAVE
+    text: "Autorizar que efectivos salgan sin identificaci\xF3n institucional y portando objetos no reglamentarios."
+    classification: 3
+    score: 40
+    immediateConsequence: Falta grave a la normativa policial de transparencia, trazabilidad y control del uso de la fuerza.
+    variableEffects:
+    - variable: 5
+      delta: -16
+    - variable: 4
+      delta: -14
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 1
+    reactionTag: D05_VERIFY_ILLEGAL
+    numericValue: 0
+  skipConditions: []
+  contextModifiers: []
+  preEventTag: 

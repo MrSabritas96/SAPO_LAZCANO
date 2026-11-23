@@ -1,0 +1,1096 @@
+#if UNITY_EDITOR
+using System.IO;
+using SimuladorBloqueos.Core;
+using SimuladorBloqueos.Data;
+using SimuladorBloqueos.UI;
+using TMPro;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+using UnityEngine.UI;
+
+namespace SimuladorBloqueos.Editor
+{
+    /// <summary>
+    /// Generador automático de la escena MainMenu con diseño visual AAA profesional,
+    /// composición cinematográfica, paleta negro/plomo/grafito y arquitectura modular.
+    /// </summary>
+    public static class MainMenuSceneBuilder
+    {
+        private static TMP_FontAsset s_DefaultFont;
+
+        [MenuItem("Simulador/Construir Escena MainMenu")]
+        public static void BuildMainMenuScene()
+        {
+            // 1. Crear escena limpia
+            string sceneDir = "Assets/_Project/Scenes/MainMenu";
+            string scenePath = $"{sceneDir}/MainMenu.unity";
+
+            if (!Directory.Exists(sceneDir))
+            {
+                Directory.CreateDirectory(sceneDir);
+                AssetDatabase.Refresh();
+            }
+
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            scene.name = "MainMenu";
+
+            // Cargar fuente TMP
+            s_DefaultFont = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+            if (s_DefaultFont == null)
+            {
+                s_DefaultFont = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset");
+            }
+
+            // 2. Configurar Iluminación y Cámara
+            var camera = CreateCinematicCamera();
+            CreateDirectionalLight();
+            CreateGlobalVolume();
+
+            // 3. Crear Fondo 3D Cinematográfico (Modular en BackgroundContainer)
+            var bgContainer = CreateBackgroundScene();
+
+            // 4. Crear Administrador de Sesión persistente
+            var sessionMgrGo = new GameObject("GameSessionManager");
+            sessionMgrGo.AddComponent<GameSessionManager>();
+
+            // 5. Crear EventSystem con New Input System
+            CreateEventSystem();
+
+            // 6. Construir Canvas y Jerarquía de Interfaz AAA
+            CreateMainMenuCanvas(camera.GetComponent<Camera>(), bgContainer);
+
+            // 7. Guardar escena
+            EditorSceneManager.SaveScene(scene, scenePath);
+            Debug.Log($"<color=green><b>[MainMenuSceneBuilder]</b> Escena creada y guardada con éxito en: {scenePath}</color>");
+
+            // 8. Actualizar Build Settings para que MainMenu sea la escena 0 y SampleScene la 1
+            ConfigureBuildSettings(scenePath);
+        }
+
+        private static GameObject CreateCinematicCamera()
+        {
+            var camGo = new GameObject("Main Camera");
+            camGo.tag = "MainCamera";
+            camGo.transform.position = new Vector3(0, 1.8f, -6f);
+            camGo.transform.rotation = Quaternion.Euler(6f, 0, 0);
+
+            var cam = camGo.AddComponent<Camera>();
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.035f, 0.042f, 0.052f); // Negro grafito profundo
+            cam.fieldOfView = 55f;
+            cam.nearClipPlane = 0.1f;
+            cam.farClipPlane = 200f;
+
+            camGo.AddComponent<AudioListener>();
+            var camData = camGo.AddComponent<UniversalAdditionalCameraData>();
+            camData.renderPostProcessing = true;
+            camData.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+            camData.antialiasingQuality = AntialiasingQuality.High;
+
+            return camGo;
+        }
+
+        private static void CreateDirectionalLight()
+        {
+            var lightGo = new GameObject("Directional Light");
+            lightGo.transform.rotation = Quaternion.Euler(32f, -40f, 0);
+
+            var light = lightGo.AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.color = new Color(0.65f, 0.72f, 0.82f); // Luz nocturna azulada fría
+            light.intensity = 0.85f;
+            light.shadows = LightShadows.Soft;
+
+            var lightData = lightGo.AddComponent<UniversalAdditionalLightData>();
+            lightData.lightCookieSize = Vector2.one * 10f;
+        }
+
+        private static void CreateGlobalVolume()
+        {
+            var volGo = new GameObject("Global Volume");
+            var vol = volGo.AddComponent<Volume>();
+            vol.isGlobal = true;
+
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            profile.name = "MainMenuVolumeProfile";
+
+            // Bloom cinematográfico suave
+            var bloom = profile.Add<Bloom>(true);
+            bloom.intensity.value = 0.35f;
+            bloom.threshold.value = 0.95f;
+            bloom.scatter.value = 0.6f;
+
+            // Tonemapping ACES
+            var tonemap = profile.Add<Tonemapping>(true);
+            tonemap.mode.value = TonemappingMode.ACES;
+
+            // Vignette sutil
+            var vignette = profile.Add<Vignette>(true);
+            vignette.intensity.value = 0.28f;
+            vignette.smoothness.value = 0.35f;
+
+            vol.profile = profile;
+
+            // Guardar perfil en Settings
+            string profPath = "Assets/_Project/Settings/MainMenuVolumeProfile.asset";
+            AssetDatabase.CreateAsset(profile, profPath);
+        }
+
+        private static Transform CreateBackgroundScene()
+        {
+            var bgRoot = new GameObject("BackgroundContainer");
+            bgRoot.transform.position = Vector3.zero;
+
+            // Material grafito mate
+            var matSlate = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+            matSlate.color = new Color(0.07f, 0.08f, 0.10f);
+            matSlate.SetFloat("_Smoothness", 0.3f);
+            matSlate.SetFloat("_Metallic", 0.4f);
+
+            var matPillar = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+            matPillar.color = new Color(0.12f, 0.14f, 0.17f);
+            matPillar.SetFloat("_Smoothness", 0.5f);
+            matPillar.SetFloat("_Metallic", 0.6f);
+
+            // Suelo de fondo
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            ground.name = "BG_Ground";
+            ground.transform.SetParent(bgRoot.transform, false);
+            ground.transform.position = new Vector3(0, -0.5f, 5f);
+            ground.transform.localScale = new Vector3(60f, 1f, 60f);
+            ground.GetComponent<MeshRenderer>().sharedMaterial = matSlate;
+
+            // Siluetas arquitectónicas monumentales en el fondo (preparadas para ser reemplazadas por Plaza Murillo)
+            for (int i = -6; i <= 6; i++)
+            {
+                if (Mathf.Abs(i) < 2) continue; // Dejar espacio visual central
+
+                var col = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                col.name = $"BG_FacadePillar_{i}";
+                col.transform.SetParent(bgRoot.transform, false);
+                col.transform.position = new Vector3(i * 3.2f, 3.5f, 14f + Mathf.Abs(i) * 1.5f);
+                col.transform.localScale = new Vector3(1.4f, 8f, 1.4f);
+                col.GetComponent<MeshRenderer>().sharedMaterial = matPillar;
+            }
+
+            // Muro de fondo / silueta de cornisa
+            var facadeWall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            facadeWall.name = "BG_FacadeWall";
+            facadeWall.transform.SetParent(bgRoot.transform, false);
+            facadeWall.transform.position = new Vector3(0, 4.5f, 22f);
+            facadeWall.transform.localScale = new Vector3(50f, 10f, 2f);
+            facadeWall.GetComponent<MeshRenderer>().sharedMaterial = matSlate;
+
+            // Luces tácticas de guardia en penumbra (ámbar sobrio)
+            var lightPoint = new GameObject("BG_GuardLight");
+            lightPoint.transform.SetParent(bgRoot.transform, false);
+            lightPoint.transform.position = new Vector3(8f, 2.5f, 8f);
+            var pl = lightPoint.AddComponent<Light>();
+            pl.type = LightType.Point;
+            pl.color = new Color(0.95f, 0.65f, 0.25f);
+            pl.intensity = 1.4f;
+            pl.range = 14f;
+
+            // Eliminar colliders en elementos visuales de fondo
+            foreach (var col in bgRoot.GetComponentsInChildren<Collider>())
+            {
+                Object.DestroyImmediate(col);
+            }
+
+            // Script de cinemática de cámara
+            var bgScript = bgRoot.AddComponent<MenuBackgroundCinematic>();
+            bgScript.backgroundContainer = bgRoot.transform;
+
+            return bgRoot.transform;
+        }
+
+        private static void CreateEventSystem()
+        {
+            var eventGo = new GameObject("EventSystem");
+            eventGo.AddComponent<EventSystem>();
+            eventGo.AddComponent<InputSystemUIInputModule>();
+        }
+
+        private static void CreateMainMenuCanvas(Camera cam, Transform bgContainer)
+        {
+            var canvasGo = new GameObject("MainMenuCanvas");
+            var canvas = canvasGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.pixelPerfect = true;
+
+            var scaler = canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920, 1080);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
+            scaler.referencePixelsPerUnit = 100f;
+            scaler.dynamicPixelsPerUnit = 10f; // Previene rasterización a baja resolución en fuentes dinámicas
+
+            canvasGo.AddComponent<GraphicRaycaster>();
+
+            // Controladores maestros
+            var nav = canvasGo.AddComponent<MenuNavigationController>();
+            var menuMgr = canvasGo.AddComponent<MainMenuManager>();
+            menuMgr.navigationController = nav;
+
+            // 1. Capa de viñeta / oscurecimiento lateral para legibilidad AAA
+            CreateLateralOverlay(canvasGo.transform);
+
+            // 2. Barra Superior (Header)
+            CreateTopHeader(canvasGo.transform);
+
+            // 3. Barra Inferior (Footer)
+            CreateBottomFooter(canvasGo.transform);
+
+            // 4. Panel Principal del Menú (Izquierda)
+            var mainPanelGo = CreateMainMenuPanel(canvasGo.transform, menuMgr, nav);
+            nav.mainMenuPanel = mainPanelGo.GetComponent<CanvasGroup>();
+
+            // 5. Panel de Registro del Participante (Modal elegante)
+            var regPanelGo = CreateRegistrationPanel(canvasGo.transform, nav);
+            nav.registrationPanel = regPanelGo.GetComponent<CanvasGroup>();
+
+            // 6. Panel de Configuración
+            var settingsPanelGo = CreateSettingsPanel(canvasGo.transform, nav);
+            nav.settingsPanel = settingsPanelGo.GetComponent<CanvasGroup>();
+
+            // 7. Panel de Historial
+            var historyPanelGo = CreateHistoryPanel(canvasGo.transform, nav);
+            nav.historyPanel = historyPanelGo.GetComponent<CanvasGroup>();
+
+            // 8. Panel de Estadísticas
+            var statsPanelGo = CreateStatisticsPanel(canvasGo.transform, nav);
+            nav.statisticsPanel = statsPanelGo.GetComponent<CanvasGroup>();
+
+            // Inicializar estados: solo el panel principal visible en el editor
+            regPanelGo.SetActive(false);
+            settingsPanelGo.SetActive(false);
+            historyPanelGo.SetActive(false);
+            statsPanelGo.SetActive(false);
+            mainPanelGo.SetActive(true);
+        }
+
+        private static void CreateLateralOverlay(Transform parent)
+        {
+            var overlay = new GameObject("VignetteOverlay", typeof(RectTransform), typeof(Image));
+            overlay.transform.SetParent(parent, false);
+            var rt = overlay.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.sizeDelta = Vector2.zero;
+
+            var img = overlay.GetComponent<Image>();
+            // Gradiente simulado oscuro lateral para que los textos resalten impecables
+            img.color = new Color(0.04f, 0.05f, 0.07f, 0.55f);
+            img.raycastTarget = false;
+        }
+
+        private static void CreateTopHeader(Transform parent)
+        {
+            var header = new GameObject("TopHeader", typeof(RectTransform));
+            header.transform.SetParent(parent, false);
+            var rt = header.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0, 1);
+            rt.anchorMax = new Vector2(1, 1);
+            rt.pivot = new Vector2(0.5f, 1);
+            rt.anchoredPosition = new Vector2(0, 0);
+            rt.sizeDelta = new Vector2(0, 56);
+
+            // Línea divisoria inferior
+            var line = new GameObject("DividerLine", typeof(RectTransform), typeof(Image));
+            line.transform.SetParent(header.transform, false);
+            var lineRt = line.GetComponent<RectTransform>();
+            lineRt.anchorMin = new Vector2(0, 0);
+            lineRt.anchorMax = new Vector2(1, 0);
+            lineRt.sizeDelta = new Vector2(-120, 1.5f);
+            lineRt.anchoredPosition = new Vector2(0, 0);
+            line.GetComponent<Image>().color = new Color(0.20f, 0.24f, 0.30f, 0.7f);
+
+            // Texto Izquierdo (Identificación Institucional sobria)
+            var leftText = CreateText(
+                "DeptText",
+                header.transform,
+                "ESTADO PLURINACIONAL DE BOLIVIA • POLICÍA BOLIVIANA\n<color=#627284>DIRECCIÓN NACIONAL DE INSTRUCCIÓN Y ENSEÑANZA</color>",
+                10,
+                FontStyles.Bold,
+                new Color(0.75f, 0.82f, 0.90f),
+                TextAlignmentOptions.MidlineLeft
+            );
+            var leftRt = leftText.GetComponent<RectTransform>();
+            leftRt.anchorMin = new Vector2(0, 0);
+            leftRt.anchorMax = new Vector2(0.5f, 1);
+            leftRt.pivot = new Vector2(0, 0.5f);
+            leftRt.anchoredPosition = new Vector2(60, 0);
+            leftRt.sizeDelta = new Vector2(500, 36);
+
+            // Texto Derecho (Reloj en tiempo real)
+            var clockText = CreateText(
+                "ClockText",
+                header.transform,
+                "LPZ | --/--/---- --:--:--",
+                11,
+                FontStyles.Normal,
+                new Color(0.60f, 0.68f, 0.78f),
+                TextAlignmentOptions.MidlineRight
+            );
+            var clockRt = clockText.GetComponent<RectTransform>();
+            clockRt.anchorMin = new Vector2(0.5f, 0);
+            clockRt.anchorMax = new Vector2(1, 1);
+            clockRt.pivot = new Vector2(1, 0.5f);
+            clockRt.anchoredPosition = new Vector2(-60, 0);
+            clockRt.sizeDelta = new Vector2(400, 36);
+            clockText.gameObject.AddComponent<SystemClockDisplay>();
+        }
+
+        private static void CreateBottomFooter(Transform parent)
+        {
+            var footer = new GameObject("BottomFooter", typeof(RectTransform));
+            footer.transform.SetParent(parent, false);
+            var rt = footer.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0, 0);
+            rt.anchorMax = new Vector2(1, 0);
+            rt.pivot = new Vector2(0.5f, 0);
+            rt.anchoredPosition = new Vector2(0, 0);
+            rt.sizeDelta = new Vector2(0, 44);
+
+            // Línea divisoria superior
+            var line = new GameObject("DividerLine", typeof(RectTransform), typeof(Image));
+            line.transform.SetParent(footer.transform, false);
+            var lineRt = line.GetComponent<RectTransform>();
+            lineRt.anchorMin = new Vector2(0, 1);
+            lineRt.anchorMax = new Vector2(1, 1);
+            lineRt.sizeDelta = new Vector2(-120, 1.5f);
+            lineRt.anchoredPosition = new Vector2(0, 0);
+            line.GetComponent<Image>().color = new Color(0.18f, 0.22f, 0.28f, 0.6f);
+
+            // Versión
+            var verText = CreateText(
+                "VersionText",
+                footer.transform,
+                "v0.1.0-alpha • Build 2026.11 • Engine: Unity 6 URP (Render Graph)",
+                11,
+                FontStyles.Normal,
+                new Color(0.40f, 0.46f, 0.54f),
+                TextAlignmentOptions.MidlineLeft
+            );
+            var verRt = verText.GetComponent<RectTransform>();
+            verRt.anchorMin = new Vector2(0, 0);
+            verRt.anchorMax = new Vector2(0.5f, 1);
+            verRt.anchoredPosition = new Vector2(60, 0);
+            verRt.sizeDelta = new Vector2(500, 30);
+
+            // Aviso de uso
+            var secText = CreateText(
+                "SecurityText",
+                footer.transform,
+                "USO EXCLUSIVO DE FORMACIÓN Y EVALUACIÓN TÁCTICA INSTITUCIONAL",
+                10,
+                FontStyles.Bold,
+                new Color(0.42f, 0.48f, 0.56f),
+                TextAlignmentOptions.MidlineRight
+            );
+            var secRt = secText.GetComponent<RectTransform>();
+            secRt.anchorMin = new Vector2(0.5f, 0);
+            secRt.anchorMax = new Vector2(1, 1);
+            secRt.anchoredPosition = new Vector2(-60, 0);
+            secRt.sizeDelta = new Vector2(600, 30);
+        }
+
+        private static GameObject CreateMainMenuPanel(Transform parent, MainMenuManager menuMgr, MenuNavigationController nav)
+        {
+            var panel = new GameObject("MainMenuPanel", typeof(RectTransform), typeof(CanvasGroup));
+            panel.transform.SetParent(parent, false);
+            var rt = panel.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0, 0);
+            rt.anchorMax = new Vector2(1, 1);
+            rt.sizeDelta = Vector2.zero;
+
+            // Contenedor lateral izquierdo adaptable
+            var leftCol = new GameObject("LeftColumn", typeof(RectTransform));
+            leftCol.transform.SetParent(panel.transform, false);
+            var leftRt = leftCol.GetComponent<RectTransform>();
+            leftRt.anchorMin = new Vector2(0, 0);
+            leftRt.anchorMax = new Vector2(0, 1);
+            leftRt.pivot = new Vector2(0, 0.5f);
+            leftRt.anchoredPosition = new Vector2(60, 0);
+            leftRt.sizeDelta = new Vector2(460, 0);
+
+            // ==========================================
+            // LOGOTIPO Y SUBTÍTULOS
+            // ==========================================
+            var logoBlock = new GameObject("BrandingBlock", typeof(RectTransform));
+            logoBlock.transform.SetParent(leftCol.transform, false);
+            var logoRt = logoBlock.GetComponent<RectTransform>();
+            logoRt.anchorMin = new Vector2(0, 1);
+            logoRt.anchorMax = new Vector2(1, 1);
+            logoRt.pivot = new Vector2(0, 1);
+            logoRt.anchoredPosition = new Vector2(0, -85);
+            logoRt.sizeDelta = new Vector2(460, 170);
+
+            // Indicador de estado táctico
+            var tagText = CreateText(
+                "TacticalTag",
+                logoBlock.transform,
+                "● SISTEMA TÁCTICO DE FORMACIÓN EN BLOQUEOS",
+                11,
+                FontStyles.Bold,
+                new Color(0.22f, 0.74f, 0.95f), // Cyan táctico
+                TextAlignmentOptions.TopLeft
+            );
+            tagText.rectTransform.anchorMin = new Vector2(0, 1);
+            tagText.rectTransform.anchorMax = new Vector2(1, 1);
+            tagText.rectTransform.pivot = new Vector2(0, 1);
+            tagText.rectTransform.anchoredPosition = new Vector2(0, 0);
+            tagText.rectTransform.sizeDelta = new Vector2(0, 18);
+
+            // Título principal
+            var titleText = CreateText(
+                "MainTitle",
+                logoBlock.transform,
+                "SIMULADOR DE BLOQUEOS",
+                28,
+                FontStyles.Bold,
+                Color.white,
+                TextAlignmentOptions.TopLeft
+            );
+            titleText.rectTransform.anchorMin = new Vector2(0, 1);
+            titleText.rectTransform.anchorMax = new Vector2(1, 1);
+            titleText.rectTransform.pivot = new Vector2(0, 1);
+            titleText.rectTransform.anchoredPosition = new Vector2(0, -22);
+            titleText.rectTransform.sizeDelta = new Vector2(0, 40);
+            titleText.characterSpacing = 1.2f;
+
+            // Subtítulo
+            var subText = CreateText(
+                "SubTitle",
+                logoBlock.transform,
+                "SIMULACIÓN Y FORMACIÓN POLICIAL\n<color=#5A6A7C>Módulo de Control de Multitudes y Toma de Decisiones</color>",
+                12,
+                FontStyles.Normal,
+                new Color(0.75f, 0.82f, 0.90f),
+                TextAlignmentOptions.TopLeft
+            );
+            subText.rectTransform.anchorMin = new Vector2(0, 1);
+            subText.rectTransform.anchorMax = new Vector2(1, 1);
+            subText.rectTransform.pivot = new Vector2(0, 1);
+            subText.rectTransform.anchoredPosition = new Vector2(0, -68);
+            subText.rectTransform.sizeDelta = new Vector2(0, 36);
+
+            // Barra decorativa sutil
+            var bar = new GameObject("DecoBar", typeof(RectTransform), typeof(Image));
+            bar.transform.SetParent(logoBlock.transform, false);
+            var barRt = bar.GetComponent<RectTransform>();
+            barRt.anchorMin = new Vector2(0, 1);
+            barRt.anchorMax = new Vector2(0, 1);
+            barRt.pivot = new Vector2(0, 1);
+            barRt.anchoredPosition = new Vector2(0, -112);
+            barRt.sizeDelta = new Vector2(70, 2.5f);
+            bar.GetComponent<Image>().color = new Color(0.22f, 0.74f, 0.95f);
+
+            // ==========================================
+            // BOTONES DE NAVEGACIÓN PRINCIPAL
+            // ==========================================
+            var buttonsContainer = new GameObject("ButtonsContainer", typeof(RectTransform), typeof(VerticalLayoutGroup));
+            buttonsContainer.transform.SetParent(leftCol.transform, false);
+            var btnRt = buttonsContainer.GetComponent<RectTransform>();
+            btnRt.anchorMin = new Vector2(0, 0);
+            btnRt.anchorMax = new Vector2(1, 1);
+            btnRt.pivot = new Vector2(0, 1);
+            btnRt.anchoredPosition = new Vector2(0, -215);
+            btnRt.sizeDelta = new Vector2(0, -320);
+
+            var vlg = buttonsContainer.GetComponent<VerticalLayoutGroup>();
+            vlg.spacing = 10;
+            vlg.childControlWidth = true;
+            vlg.childControlHeight = false;
+            vlg.childForceExpandWidth = true;
+            vlg.childForceExpandHeight = false;
+            vlg.childControlHeight = false;
+            vlg.childForceExpandWidth = true;
+            vlg.childForceExpandHeight = false;
+
+            menuMgr.newSimulationButton = CreateMenuButton(buttonsContainer.transform, "Btn_NewSim", "NUEVA SIMULACIÓN", true);
+            menuMgr.continueButton = CreateMenuButton(buttonsContainer.transform, "Btn_Continue", "CONTINUAR", false);
+            menuMgr.historyButton = CreateMenuButton(buttonsContainer.transform, "Btn_History", "HISTORIAL", false);
+            menuMgr.statisticsButton = CreateMenuButton(buttonsContainer.transform, "Btn_Stats", "ESTADÍSTICAS", false);
+            menuMgr.settingsButton = CreateMenuButton(buttonsContainer.transform, "Btn_Settings", "CONFIGURACIÓN", false);
+            menuMgr.exitButton = CreateMenuButton(buttonsContainer.transform, "Btn_Exit", "SALIR", false);
+
+            return panel;
+        }
+
+        private static GameObject CreateRegistrationPanel(Transform parent, MenuNavigationController nav)
+        {
+            var panel = CreateModalContainer(parent, "RegistrationPanel", "REGISTRO DEL PARTICIPANTE", "Ingrese los datos del oficial o cadete para iniciar la evaluación táctica.");
+
+            var regCtrl = panel.AddComponent<ParticipantRegistrationController>();
+            regCtrl.navigationController = nav;
+
+            var body = panel.transform.Find("ModalCard/Body");
+
+            regCtrl.nameInput = CreateInputField(body, "Input_Name", "Nombre del Participante:", "Ej: Subt. Juan Pérez Rodríguez");
+            regCtrl.codeInput = CreateInputField(body, "Input_Code", "Código de Participante:", "Ej: POL-2026-042");
+            regCtrl.rankDropdown = CreateDropdown(body, "Dropdown_Rank", "Grado del Participante:");
+            regCtrl.unitInput = CreateInputField(body, "Input_Unit", "Sección / Unidad de Formación:", "Ej: UTOP Sección Alpha");
+            regCtrl.instructorInput = CreateInputField(body, "Input_Instructor", "Instructor Responsable (Opcional):", "Ej: My. V. Mendoza");
+
+            // Texto de validación de error
+            var msgText = CreateText("ValidationMessage", body, "", 12, FontStyles.Bold, new Color(1f, 0.4f, 0.4f), TextAlignmentOptions.Center);
+            msgText.rectTransform.sizeDelta = new Vector2(500, 26);
+            regCtrl.validationMessageText = msgText;
+
+            // Botones de acción inferiores
+            var footer = panel.transform.Find("ModalCard/Footer");
+            regCtrl.startSimulationButton = CreateActionButton(footer, "Btn_Start", "INICIAR SIMULACIÓN", true);
+            regCtrl.backButton = CreateActionButton(footer, "Btn_Back", "VOLVER", false);
+
+            return panel;
+        }
+
+        private static GameObject CreateSettingsPanel(Transform parent, MenuNavigationController nav)
+        {
+            var panel = CreateModalContainer(parent, "SettingsPanel", "CONFIGURACIÓN DEL SISTEMA", "Ajustes de calidad gráfica, resolución de pantalla y audio.");
+
+            var settingsCtrl = panel.AddComponent<SettingsController>();
+            settingsCtrl.navigationController = nav;
+
+            var body = panel.transform.Find("ModalCard/Body");
+
+            settingsCtrl.resolutionDropdown = CreateDropdown(body, "Dropdown_Res", "Resolución de Pantalla:");
+            settingsCtrl.qualityDropdown = CreateDropdown(body, "Dropdown_Quality", "Calidad Gráfica (URP):");
+            settingsCtrl.fullscreenToggle = CreateToggle(body, "Toggle_Fullscreen", "Modo Pantalla Completa");
+
+            // Slider de Volumen
+            var sliderData = CreateSlider(body, "Slider_Volume", "Volumen General:");
+            settingsCtrl.masterVolumeSlider = sliderData.Item1;
+            settingsCtrl.volumePercentText = sliderData.Item2;
+
+            // Referencia de Controles
+            var infoBox = CreateInfoBox(body, "Controles Tácticos:\n• [W, A, S, D]: Desplazamiento\n• [Shift]: Carrera / Desplazamiento táctico rápido\n• [Ratón]: Orientación de visión orbital (3ra persona)\n• [Clic]: Bloqueo de puntero | [Esc]: Liberar puntero / Menú");
+
+            var footer = panel.transform.Find("ModalCard/Footer");
+            settingsCtrl.backButton = CreateActionButton(footer, "Btn_Back", "VOLVER", false);
+
+            return panel;
+        }
+
+        private static GameObject CreateHistoryPanel(Transform parent, MenuNavigationController nav)
+        {
+            var panel = CreateModalContainer(parent, "HistoryPanel", "HISTORIAL DE SIMULACIONES", "Registro de sesiones de evaluación y toma de decisiones realizadas.");
+
+            var ctrl = panel.AddComponent<InfoPanelController>();
+            ctrl.navigationController = nav;
+
+            var body = panel.transform.Find("ModalCard/Body");
+
+            string sampleLog =
+                "<b>SESIÓN #03 - 09/11/2026 11:45</b>\n" +
+                "Participante: Subt. Carlos Mamani Ramos | Cód: POL-2026-014\n" +
+                "Escenario: Bloqueo Zona Central | Resultado: 88/100 (Aprobado)\n" +
+                "Observación: Desescalada exitosa sin uso de material antidisturbios.\n\n" +
+                "<b>SESIÓN #02 - 08/11/2026 16:30</b>\n" +
+                "Participante: Cdt. Andrea Flores Choque | Cód: POL-2026-089\n" +
+                "Escenario: Formación de Cordón Preventivo | Resultado: 92/100 (Sobresaliente)\n" +
+                "Observación: Rápido despliegue y correcta mantención de línea.\n\n" +
+                "<b>SESIÓN #01 - 07/11/2026 09:15</b>\n" +
+                "Participante: Subt. Jorge Gutiérrez Silva | Cód: POL-2026-031\n" +
+                "Escenario: Evaluación Inicial de Línea | Resultado: 81/100 (Aprobado)";
+
+            CreateInfoBox(body, sampleLog);
+
+            var footer = panel.transform.Find("ModalCard/Footer");
+            ctrl.backButton = CreateActionButton(footer, "Btn_Back", "VOLVER", false);
+
+            return panel;
+        }
+
+        private static GameObject CreateStatisticsPanel(Transform parent, MenuNavigationController nav)
+        {
+            var panel = CreateModalContainer(parent, "StatisticsPanel", "ESTADÍSTICAS Y RENDIMIENTO", "Métricas consolidadas de formación y evaluación táctica.");
+
+            var ctrl = panel.AddComponent<InfoPanelController>();
+            ctrl.navigationController = nav;
+
+            var body = panel.transform.Find("ModalCard/Body");
+
+            string statsInfo =
+                "<b>MÉTRICAS CONSOLIDADAS DEL GRUPO DE FORMACIÓN:</b>\n\n" +
+                "• <b>Tasa Promedio de Desescalada Pacífica:</b> 86.4%\n" +
+                "• <b>Tiempo Promedio de Respuesta a la Orden:</b> 2.3 segundos\n" +
+                "• <b>Adherencia a Protocolos de Derechos Humanos:</b> 98.1%\n" +
+                "• <b>Simulaciones Completadas con Éxito:</b> 24 / 26\n" +
+                "• <b>Incidentes Críticos Evitados:</b> 100%\n\n" +
+                "<color=#6A7B8E><i>Las métricas detalladas se actualizarán automáticamente al finalizar cada simulación en la Fase de Evaluación.</i></color>";
+
+            CreateInfoBox(body, statsInfo);
+
+            var footer = panel.transform.Find("ModalCard/Footer");
+            ctrl.backButton = CreateActionButton(footer, "Btn_Back", "VOLVER", false);
+
+            return panel;
+        }
+
+        // ==========================================
+        // HELPERS DE UI AAA
+        // ==========================================
+
+        private static GameObject CreateModalContainer(Transform parent, string name, string title, string subtitle)
+        {
+            var modal = new GameObject(name, typeof(RectTransform), typeof(CanvasGroup));
+            modal.transform.SetParent(parent, false);
+            var rt = modal.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.sizeDelta = Vector2.zero;
+
+            // Fondo semitransparente oscuro (modal backdrop)
+            var backdrop = new GameObject("Backdrop", typeof(RectTransform), typeof(Image));
+            backdrop.transform.SetParent(modal.transform, false);
+            var backRt = backdrop.GetComponent<RectTransform>();
+            backRt.anchorMin = Vector2.zero;
+            backRt.anchorMax = Vector2.one;
+            backRt.sizeDelta = Vector2.zero;
+            backdrop.GetComponent<Image>().color = new Color(0.02f, 0.03f, 0.04f, 0.75f);
+
+            // Tarjeta central elegante
+            var card = new GameObject("ModalCard", typeof(RectTransform), typeof(Image));
+            card.transform.SetParent(modal.transform, false);
+            var cardRt = card.GetComponent<RectTransform>();
+            cardRt.anchorMin = new Vector2(0.5f, 0.5f);
+            cardRt.anchorMax = new Vector2(0.5f, 0.5f);
+            cardRt.pivot = new Vector2(0.5f, 0.5f);
+            cardRt.sizeDelta = new Vector2(580, 580);
+            var cardImg = card.GetComponent<Image>();
+            cardImg.color = new Color(0.09f, 0.11f, 0.15f, 0.98f);
+
+            // Borde y sombra elegantes del card
+            var ol = card.AddComponent<Outline>();
+            ol.effectColor = new Color(0.24f, 0.30f, 0.38f, 0.85f);
+            ol.effectDistance = new Vector2(1.5f, -1.5f);
+
+            var shadow = card.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.65f);
+            shadow.effectDistance = new Vector2(4f, -4f);
+
+            // Header del Modal
+            var header = new GameObject("Header", typeof(RectTransform));
+            header.transform.SetParent(card.transform, false);
+            var headerRt = header.GetComponent<RectTransform>();
+            headerRt.anchorMin = new Vector2(0, 1);
+            headerRt.anchorMax = new Vector2(1, 1);
+            headerRt.pivot = new Vector2(0.5f, 1);
+            headerRt.anchoredPosition = new Vector2(0, -20);
+            headerRt.sizeDelta = new Vector2(-50, 55);
+
+            var tTitle = CreateText("Title", header.transform, title, 19, FontStyles.Bold, Color.white, TextAlignmentOptions.TopLeft);
+            tTitle.characterSpacing = 1.5f;
+            tTitle.rectTransform.anchoredPosition = new Vector2(0, 0);
+
+            var tSub = CreateText("Sub", header.transform, subtitle, 11.5f, FontStyles.Normal, new Color(0.65f, 0.72f, 0.82f), TextAlignmentOptions.TopLeft);
+            tSub.rectTransform.anchoredPosition = new Vector2(0, -26);
+
+            // Body con VerticalLayoutGroup
+            var body = new GameObject("Body", typeof(RectTransform), typeof(VerticalLayoutGroup));
+            body.transform.SetParent(card.transform, false);
+            var bodyRt = body.GetComponent<RectTransform>();
+            bodyRt.anchorMin = new Vector2(0, 0);
+            bodyRt.anchorMax = new Vector2(1, 1);
+            bodyRt.anchoredPosition = new Vector2(0, -28);
+            bodyRt.sizeDelta = new Vector2(-50, -155);
+
+            var vlg = body.GetComponent<VerticalLayoutGroup>();
+            vlg.spacing = 8;
+            vlg.childControlWidth = true;
+            vlg.childControlHeight = false;
+            vlg.childForceExpandWidth = true;
+            vlg.childForceExpandHeight = false;
+
+            // Footer con botones
+            var footer = new GameObject("Footer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            footer.transform.SetParent(card.transform, false);
+            var footRt = footer.GetComponent<RectTransform>();
+            footRt.anchorMin = new Vector2(0, 0);
+            footRt.anchorMax = new Vector2(1, 0);
+            footRt.pivot = new Vector2(0.5f, 0);
+            footRt.anchoredPosition = new Vector2(0, 20);
+            footRt.sizeDelta = new Vector2(-50, 44);
+
+            var hlg = footer.GetComponent<HorizontalLayoutGroup>();
+            hlg.spacing = 15;
+            hlg.childControlWidth = true;
+            hlg.childControlHeight = true;
+            hlg.childForceExpandWidth = true;
+            hlg.childForceExpandHeight = true;
+
+            return modal;
+        }
+
+        private static Button CreateMenuButton(Transform parent, string name, string text, bool isPrimary)
+        {
+            var btnGo = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            btnGo.transform.SetParent(parent, false);
+            var rt = btnGo.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(360, 48);
+
+            var img = btnGo.GetComponent<Image>();
+            img.color = isPrimary ? new Color(0.12f, 0.16f, 0.22f, 0.95f) : new Color(0.07f, 0.09f, 0.12f, 0.85f);
+
+            var btn = btnGo.GetComponent<Button>();
+            var colors = btn.colors;
+            colors.normalColor = img.color;
+            colors.highlightedColor = new Color(0.18f, 0.24f, 0.32f, 1f);
+            colors.pressedColor = new Color(0.06f, 0.08f, 0.10f, 1f);
+            colors.disabledColor = new Color(0.05f, 0.06f, 0.08f, 0.4f);
+            colors.fadeDuration = 0.12f;
+            btn.colors = colors;
+
+            // Indicador de barra lateral izquierda al estilo AAA
+            var indicator = new GameObject("AccentIndicator", typeof(RectTransform), typeof(Image));
+            indicator.transform.SetParent(btnGo.transform, false);
+            var indRt = indicator.GetComponent<RectTransform>();
+            indRt.anchorMin = new Vector2(0, 0);
+            indRt.anchorMax = new Vector2(0, 1);
+            indRt.pivot = new Vector2(0, 0.5f);
+            indRt.sizeDelta = new Vector2(3.5f, 0);
+            indicator.GetComponent<Image>().color = isPrimary ? new Color(0.22f, 0.74f, 0.95f) : new Color(0.35f, 0.42f, 0.52f);
+
+            // Texto del botón
+            var t = CreateText("Label", btnGo.transform, text, 13, FontStyles.Bold, Color.white, TextAlignmentOptions.MidlineLeft);
+            t.rectTransform.anchorMin = Vector2.zero;
+            t.rectTransform.anchorMax = Vector2.one;
+            t.rectTransform.offsetMin = new Vector2(24, 0);
+            t.rectTransform.offsetMax = new Vector2(-10, 0);
+            t.characterSpacing = 1.2f;
+
+            return btn;
+        }
+
+        private static Button CreateActionButton(Transform parent, string name, string text, bool isPrimary)
+        {
+            var btnGo = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            btnGo.transform.SetParent(parent, false);
+
+            var img = btnGo.GetComponent<Image>();
+            img.color = isPrimary ? new Color(0.10f, 0.45f, 0.65f, 1f) : new Color(0.14f, 0.18f, 0.24f, 1f);
+
+            var btn = btnGo.GetComponent<Button>();
+            var colors = btn.colors;
+            colors.normalColor = img.color;
+            colors.highlightedColor = isPrimary ? new Color(0.15f, 0.55f, 0.80f, 1f) : new Color(0.22f, 0.28f, 0.36f, 1f);
+            colors.pressedColor = isPrimary ? new Color(0.07f, 0.35f, 0.52f, 1f) : new Color(0.08f, 0.10f, 0.14f, 1f);
+            colors.fadeDuration = 0.12f;
+            btn.colors = colors;
+
+            var t = CreateText("Label", btnGo.transform, text, 12, FontStyles.Bold, Color.white, TextAlignmentOptions.Center);
+            t.rectTransform.anchorMin = Vector2.zero;
+            t.rectTransform.anchorMax = Vector2.one;
+            t.rectTransform.offsetMin = Vector2.zero;
+            t.rectTransform.offsetMax = Vector2.zero;
+            t.characterSpacing = 1f;
+
+            return btn;
+        }
+
+        private static TMP_InputField CreateInputField(Transform parent, string name, string label, string placeholderText)
+        {
+            var container = new GameObject(name + "_Container", typeof(RectTransform));
+            container.transform.SetParent(parent, false);
+            container.GetComponent<RectTransform>().sizeDelta = new Vector2(0, 62);
+
+            // Label
+            var lbl = CreateText("Label", container.transform, label, 11, FontStyles.Bold, new Color(0.72f, 0.80f, 0.90f), TextAlignmentOptions.TopLeft);
+            lbl.rectTransform.anchoredPosition = new Vector2(0, -2);
+            lbl.rectTransform.sizeDelta = new Vector2(400, 18);
+
+            // Input Field Box
+            var inputGo = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(TMP_InputField));
+            inputGo.transform.SetParent(container.transform, false);
+            var inRt = inputGo.GetComponent<RectTransform>();
+            inRt.anchorMin = new Vector2(0, 0);
+            inRt.anchorMax = new Vector2(1, 0);
+            inRt.pivot = new Vector2(0.5f, 0);
+            inRt.anchoredPosition = new Vector2(0, 0);
+            inRt.sizeDelta = new Vector2(0, 38);
+
+            var img = inputGo.GetComponent<Image>();
+            img.color = new Color(0.05f, 0.07f, 0.10f, 0.95f);
+            var inOl = inputGo.AddComponent<Outline>();
+            inOl.effectColor = new Color(0.20f, 0.26f, 0.34f, 0.75f);
+            inOl.effectDistance = new Vector2(1f, -1f);
+
+            var input = inputGo.GetComponent<TMP_InputField>();
+
+            // TextArea
+            var textArea = new GameObject("Text Area", typeof(RectTransform), typeof(RectMask2D));
+            textArea.transform.SetParent(inputGo.transform, false);
+            var areaRt = textArea.GetComponent<RectTransform>();
+            areaRt.anchorMin = Vector2.zero;
+            areaRt.anchorMax = Vector2.one;
+            areaRt.sizeDelta = new Vector2(-20, -6);
+
+            // Placeholder
+            var ph = CreateText("Placeholder", textArea.transform, placeholderText, 12, FontStyles.Italic, new Color(0.40f, 0.46f, 0.54f), TextAlignmentOptions.MidlineLeft);
+            ph.rectTransform.anchorMin = Vector2.zero;
+            ph.rectTransform.anchorMax = Vector2.one;
+            ph.rectTransform.sizeDelta = Vector2.zero;
+
+            // Text
+            var text = CreateText("Text", textArea.transform, "", 12, FontStyles.Normal, Color.white, TextAlignmentOptions.MidlineLeft);
+            text.rectTransform.anchorMin = Vector2.zero;
+            text.rectTransform.anchorMax = Vector2.one;
+            text.rectTransform.sizeDelta = Vector2.zero;
+
+            input.textViewport = areaRt;
+            input.textComponent = text;
+            input.placeholder = ph;
+            input.fontAsset = s_DefaultFont;
+
+            return input;
+        }
+
+        private static TMP_Dropdown CreateDropdown(Transform parent, string name, string label)
+        {
+            var container = new GameObject(name + "_Container", typeof(RectTransform));
+            container.transform.SetParent(parent, false);
+            container.GetComponent<RectTransform>().sizeDelta = new Vector2(0, 62);
+
+            var lbl = CreateText("Label", container.transform, label, 11, FontStyles.Bold, new Color(0.72f, 0.80f, 0.90f), TextAlignmentOptions.TopLeft);
+            lbl.rectTransform.anchoredPosition = new Vector2(0, -2);
+            lbl.rectTransform.sizeDelta = new Vector2(400, 18);
+
+            var dropGo = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(TMP_Dropdown));
+            dropGo.transform.SetParent(container.transform, false);
+            var dRt = dropGo.GetComponent<RectTransform>();
+            dRt.anchorMin = new Vector2(0, 0);
+            dRt.anchorMax = new Vector2(1, 0);
+            dRt.pivot = new Vector2(0.5f, 0);
+            dRt.anchoredPosition = new Vector2(0, 0);
+            dRt.sizeDelta = new Vector2(0, 38);
+
+            dropGo.GetComponent<Image>().color = new Color(0.05f, 0.07f, 0.10f, 0.95f);
+            var dropOl = dropGo.AddComponent<Outline>();
+            dropOl.effectColor = new Color(0.20f, 0.26f, 0.34f, 0.75f);
+            dropOl.effectDistance = new Vector2(1f, -1f);
+
+            var captionText = CreateText("Caption Text", dropGo.transform, "Opción", 12, FontStyles.Normal, Color.white, TextAlignmentOptions.MidlineLeft);
+            captionText.rectTransform.anchorMin = Vector2.zero;
+            captionText.rectTransform.anchorMax = Vector2.one;
+            captionText.rectTransform.anchoredPosition = new Vector2(15, 0);
+            captionText.rectTransform.sizeDelta = new Vector2(-40, 0);
+
+            var dropdown = dropGo.GetComponent<TMP_Dropdown>();
+            dropdown.captionText = captionText;
+
+            // Template básico para el desplegable
+            var template = new GameObject("Template", typeof(RectTransform), typeof(Image), typeof(ScrollRect));
+            template.transform.SetParent(dropGo.transform, false);
+            template.SetActive(false);
+            var tempRt = template.GetComponent<RectTransform>();
+            tempRt.anchorMin = new Vector2(0, 0);
+            tempRt.anchorMax = new Vector2(1, 0);
+            tempRt.pivot = new Vector2(0.5f, 1);
+            tempRt.anchoredPosition = new Vector2(0, -2);
+            tempRt.sizeDelta = new Vector2(0, 150);
+            template.GetComponent<Image>().color = new Color(0.07f, 0.09f, 0.12f, 0.98f);
+
+            var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(Mask), typeof(Image));
+            viewport.transform.SetParent(template.transform, false);
+            var vpRt = viewport.GetComponent<RectTransform>();
+            vpRt.anchorMin = Vector2.zero;
+            vpRt.anchorMax = Vector2.one;
+            vpRt.sizeDelta = Vector2.zero;
+
+            var content = new GameObject("Content", typeof(RectTransform));
+            content.transform.SetParent(viewport.transform, false);
+            var cRt = content.GetComponent<RectTransform>();
+            cRt.anchorMin = new Vector2(0, 1);
+            cRt.anchorMax = new Vector2(1, 1);
+            cRt.pivot = new Vector2(0.5f, 1);
+            cRt.sizeDelta = new Vector2(0, 40);
+
+            var item = new GameObject("Item", typeof(RectTransform), typeof(Toggle));
+            item.transform.SetParent(content.transform, false);
+            var itemRt = item.GetComponent<RectTransform>();
+            itemRt.anchorMin = new Vector2(0, 1);
+            itemRt.anchorMax = new Vector2(1, 1);
+            itemRt.pivot = new Vector2(0.5f, 1);
+            itemRt.sizeDelta = new Vector2(0, 36);
+
+            var itemText = CreateText("Item Text", item.transform, "Opción", 12, FontStyles.Normal, Color.white, TextAlignmentOptions.MidlineLeft);
+            itemText.rectTransform.anchorMin = Vector2.zero;
+            itemText.rectTransform.anchorMax = Vector2.one;
+            itemText.rectTransform.anchoredPosition = new Vector2(15, 0);
+
+            dropdown.template = tempRt;
+            dropdown.itemText = itemText;
+
+            return dropdown;
+        }
+
+        private static Toggle CreateToggle(Transform parent, string name, string label)
+        {
+            var toggleGo = new GameObject(name, typeof(RectTransform), typeof(Toggle));
+            toggleGo.transform.SetParent(parent, false);
+            toggleGo.GetComponent<RectTransform>().sizeDelta = new Vector2(0, 36);
+
+            var bg = new GameObject("Background", typeof(RectTransform), typeof(Image));
+            bg.transform.SetParent(toggleGo.transform, false);
+            var bgRt = bg.GetComponent<RectTransform>();
+            bgRt.anchorMin = new Vector2(0, 0.5f);
+            bgRt.anchorMax = new Vector2(0, 0.5f);
+            bgRt.pivot = new Vector2(0, 0.5f);
+            bgRt.sizeDelta = new Vector2(22, 22);
+            bg.GetComponent<Image>().color = new Color(0.12f, 0.15f, 0.20f);
+
+            var check = new GameObject("Checkmark", typeof(RectTransform), typeof(Image));
+            check.transform.SetParent(bg.transform, false);
+            var checkRt = check.GetComponent<RectTransform>();
+            checkRt.anchorMin = Vector2.zero;
+            checkRt.anchorMax = Vector2.one;
+            checkRt.sizeDelta = new Vector2(-6, -6);
+            check.GetComponent<Image>().color = new Color(0.22f, 0.74f, 0.95f);
+
+            var toggle = toggleGo.GetComponent<Toggle>();
+            toggle.graphic = check.GetComponent<Image>();
+            toggle.targetGraphic = bg.GetComponent<Image>();
+
+            var lbl = CreateText("Label", toggleGo.transform, label, 12, FontStyles.Normal, Color.white, TextAlignmentOptions.MidlineLeft);
+            lbl.rectTransform.anchoredPosition = new Vector2(34, 0);
+            lbl.rectTransform.sizeDelta = new Vector2(300, 30);
+
+            return toggle;
+        }
+
+        private static System.Tuple<Slider, TextMeshProUGUI> CreateSlider(Transform parent, string name, string label)
+        {
+            var container = new GameObject(name + "_Container", typeof(RectTransform));
+            container.transform.SetParent(parent, false);
+            container.GetComponent<RectTransform>().sizeDelta = new Vector2(0, 60);
+
+            var lbl = CreateText("Label", container.transform, label, 11, FontStyles.Bold, new Color(0.72f, 0.80f, 0.90f), TextAlignmentOptions.TopLeft);
+            lbl.rectTransform.anchoredPosition = new Vector2(0, -2);
+            lbl.rectTransform.sizeDelta = new Vector2(300, 18);
+
+            var valText = CreateText("ValText", container.transform, "100%", 11, FontStyles.Bold, new Color(0.22f, 0.74f, 0.95f), TextAlignmentOptions.TopRight);
+            valText.rectTransform.anchorMin = new Vector2(1, 1);
+            valText.rectTransform.anchorMax = new Vector2(1, 1);
+            valText.rectTransform.pivot = new Vector2(1, 1);
+            valText.rectTransform.anchoredPosition = new Vector2(0, -2);
+            valText.rectTransform.sizeDelta = new Vector2(100, 18);
+
+            var sliderGo = new GameObject(name, typeof(RectTransform), typeof(Slider));
+            sliderGo.transform.SetParent(container.transform, false);
+            var slRt = sliderGo.GetComponent<RectTransform>();
+            slRt.anchorMin = new Vector2(0, 0);
+            slRt.anchorMax = new Vector2(1, 0);
+            slRt.anchoredPosition = new Vector2(0, 8);
+            slRt.sizeDelta = new Vector2(0, 20);
+
+            var slider = sliderGo.GetComponent<Slider>();
+            slider.minValue = 0f;
+            slider.maxValue = 1f;
+            slider.value = 1f;
+
+            var bg = new GameObject("Background", typeof(RectTransform), typeof(Image));
+            bg.transform.SetParent(sliderGo.transform, false);
+            var bgRt = bg.GetComponent<RectTransform>();
+            bgRt.anchorMin = new Vector2(0, 0.25f);
+            bgRt.anchorMax = new Vector2(1, 0.75f);
+            bgRt.sizeDelta = Vector2.zero;
+            bg.GetComponent<Image>().color = new Color(0.12f, 0.15f, 0.20f);
+
+            var fillArea = new GameObject("Fill Area", typeof(RectTransform));
+            fillArea.transform.SetParent(sliderGo.transform, false);
+            var faRt = fillArea.GetComponent<RectTransform>();
+            faRt.anchorMin = new Vector2(0, 0.25f);
+            faRt.anchorMax = new Vector2(1, 0.75f);
+            faRt.sizeDelta = new Vector2(-20, 0);
+
+            var fill = new GameObject("Fill", typeof(RectTransform), typeof(Image));
+            fill.transform.SetParent(fillArea.transform, false);
+            fill.GetComponent<Image>().color = new Color(0.22f, 0.74f, 0.95f);
+
+            var handleArea = new GameObject("Handle Slide Area", typeof(RectTransform));
+            handleArea.transform.SetParent(sliderGo.transform, false);
+            var haRt = handleArea.GetComponent<RectTransform>();
+            haRt.anchorMin = Vector2.zero;
+            haRt.anchorMax = Vector2.one;
+            haRt.sizeDelta = new Vector2(-20, 0);
+
+            var handle = new GameObject("Handle", typeof(RectTransform), typeof(Image));
+            handle.transform.SetParent(handleArea.transform, false);
+            var hRt = handle.GetComponent<RectTransform>();
+            hRt.sizeDelta = new Vector2(16, 22);
+            handle.GetComponent<Image>().color = Color.white;
+
+            slider.fillRect = fill.GetComponent<RectTransform>();
+            slider.handleRect = hRt;
+            slider.targetGraphic = handle.GetComponent<Image>();
+
+            return new System.Tuple<Slider, TextMeshProUGUI>(slider, valText);
+        }
+
+        private static GameObject CreateInfoBox(Transform parent, string infoContent)
+        {
+            var box = new GameObject("InfoBox", typeof(RectTransform), typeof(Image));
+            box.transform.SetParent(parent, false);
+            var rt = box.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(0, 220);
+
+            box.GetComponent<Image>().color = new Color(0.05f, 0.07f, 0.10f, 0.95f);
+            var boxOl = box.AddComponent<Outline>();
+            boxOl.effectColor = new Color(0.20f, 0.26f, 0.34f, 0.75f);
+            boxOl.effectDistance = new Vector2(1f, -1f);
+
+            var text = CreateText("Content", box.transform, infoContent, 12, FontStyles.Normal, new Color(0.85f, 0.90f, 0.96f), TextAlignmentOptions.TopLeft);
+            text.rectTransform.anchorMin = Vector2.zero;
+            text.rectTransform.anchorMax = Vector2.one;
+            text.rectTransform.sizeDelta = new Vector2(-30, -30);
+            text.lineSpacing = 8f;
+
+            return box;
+        }
+
+        private static TextMeshProUGUI CreateText(string name, Transform parent, string text, float size, FontStyles style, Color color, TextAlignmentOptions alignment)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(TextMeshProUGUI));
+            go.transform.SetParent(parent, false);
+
+            var tmp = go.GetComponent<TextMeshProUGUI>();
+            if (s_DefaultFont != null) tmp.font = s_DefaultFont;
+            tmp.text = text;
+            tmp.fontSize = size;
+            tmp.fontStyle = style;
+            tmp.color = color;
+            tmp.alignment = alignment;
+            tmp.raycastTarget = false;
+            tmp.extraPadding = true; // Evita recorte en bordes SDF
+            tmp.richText = true;
+            tmp.parseCtrlCharacters = true;
+
+            return tmp;
+        }
+
+        private static void ConfigureBuildSettings(string mainMenuScenePath)
+        {
+            string baseUtopScenePath = "Assets/_Project/Scenes/BaseUTOP/BaseUTOP.unity";
+            string sampleScenePath = "Assets/Scenes/SampleScene.unity";
+
+            var scenes = new EditorBuildSettingsScene[]
+            {
+                new EditorBuildSettingsScene(mainMenuScenePath, true),   // Index 0: MainMenu
+                new EditorBuildSettingsScene(baseUtopScenePath, true),   // Index 1: BaseUTOP
+                new EditorBuildSettingsScene(sampleScenePath, true)      // Index 2: SampleScene
+            };
+
+            EditorBuildSettings.scenes = scenes;
+            Debug.Log($"<color=cyan>[BuildSettings] Escenas configuradas: 0 = {mainMenuScenePath}, 1 = {baseUtopScenePath}, 2 = {sampleScenePath}</color>");
+        }
+    }
+}
+#endif

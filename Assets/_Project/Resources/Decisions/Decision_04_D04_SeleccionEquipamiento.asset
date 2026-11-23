@@ -1,0 +1,105 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab39acaa91aecb945b15e65e0081ac20, type: 3}
+  m_Name: Decision_04_D04_SeleccionEquipamiento
+  m_EditorClassIdentifier: Assembly-CSharp::SimuladorBloqueos.Decisions.DecisionData
+  decisionId: D04_SeleccionEquipamiento
+  order: 4
+  stageName: "Selecci\xF3n de equipamiento"
+  context: "El contingente se dirige a la Sala de Armas (Armer\xEDa UTOP en Planta Baja), donde se encuentran los escudos de policarbonato (ESCUDO), bastones policiales (TONFA), aerosoles (GASLACRISPRITE), lanzadores de 37mm (LANZAGASLACRI) y escopetas (ESCOPETA)."
+  question: "\xBFQu\xE9 dotaci\xF3n de equipamiento ordenas retirar de la Sala de Armas para el contingente?"
+  kind: 0
+  shuffleOptions: 1
+  primaryCriterion: 3
+  hasSecondaryCriterion: 1
+  secondaryCriterion: 1
+  secondaryShare: 0.3
+  options:
+  - id: D04_EXC
+    text: "Dotaci\xF3n defensiva reglamentaria completa: cascos con visor, chalecos t\xE1cticos, escudos antimotines (ESCUDO) y tonfas (TONFA), manteniendo el lanzador no letal bajo control estricto del jefe de grupo."
+    classification: 0
+    score: 100
+    immediateConsequence: "La escuadra ingresa a la Sala de Armas, equipa escudos y tonfas 3D y regresa protegida al Patio de Honor cumpliendo el est\xE1ndar de proporcionalidad."
+    variableEffects:
+    - variable: 4
+      delta: 25
+    - variable: 1
+      delta: 15
+    - variable: 5
+      delta: 8
+    deferredConsequences: []
+    setFlags:
+    - D04_PROPORTIONAL_GEAR
+    criticalViolation: 0
+    reactionTag: D04_GEAR_EXCELLENT
+    numericValue: 0
+  - id: D04_GOOD
+    text: "Dotaci\xF3n defensiva est\xE1ndar con escudos y tonfas para la primera l\xEDnea, sin portar dispositivos qu\xEDmicos ni lanzadores de apoyo."
+    classification: 1
+    score: 85
+    immediateConsequence: El personal queda bien protegido ante objetos contundentes, aunque con menor capacidad disuasiva a distancia.
+    variableEffects:
+    - variable: 4
+      delta: 16
+    - variable: 1
+      delta: 10
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 0
+    reactionTag: D04_GEAR_GOOD
+    numericValue: 0
+  - id: D04_MOD
+    text: "Salir r\xE1pidamente sin escudos antimotines ni protecci\xF3n facial completa para ahorrar tiempo en la Armer\xEDa."
+    classification: 2
+    score: 60
+    immediateConsequence: "Los efectivos quedan vulnerables ante el lanzamiento de piedras y artefactos pirot\xE9cnicos en la Calle Jun\xEDn."
+    variableEffects:
+    - variable: 4
+      delta: -18
+    - variable: 1
+      delta: -16
+    deferredConsequences:
+    - id: DEF_D04_UNPROTECTED_LINE
+      afterDecisions: 3
+      description: "La falta de escudos antimotines (Decisi\xF3n 4) reduce dr\xE1sticamente la capacidad de resistir proyectiles contundentes en el acceso."
+      effects:
+      - variable: 1
+        delta: -10
+      - variable: 5
+        delta: -8
+      setFlag: 
+      scoreDelta: -5
+      criterion: 3
+    setFlags:
+    - D04_NO_SHIELDS
+    criticalViolation: 0
+    reactionTag: D04_GEAR_INSUFFICIENT
+    numericValue: 0
+  - id: D04_GRAVE
+    text: "Distribuir escopetas y lanzadores de gas de forma indiscriminada a toda la tropa sin control de mando ni registro en armer\xEDa."
+    classification: 3
+    score: 35
+    immediateConsequence: "Violaci\xF3n grave de los protocolos de control de armamento y alto riesgo de uso desproporcionado de la fuerza."
+    variableEffects:
+    - variable: 5
+      delta: -20
+    - variable: 6
+      delta: 16
+    deferredConsequences: []
+    setFlags:
+    - D04_UNCONTROLLED_WEAPONS
+    criticalViolation: 1
+    reactionTag: D04_GEAR_VIOLATION
+    numericValue: 0
+  skipConditions: []
+  contextModifiers: []
+  preEventTag: 

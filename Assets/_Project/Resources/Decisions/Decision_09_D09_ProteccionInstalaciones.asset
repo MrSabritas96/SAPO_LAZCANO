@@ -1,0 +1,90 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab39acaa91aecb945b15e65e0081ac20, type: 3}
+  m_Name: Decision_09_D09_ProteccionInstalaciones
+  m_EditorClassIdentifier: Assembly-CSharp::SimuladorBloqueos.Decisions.DecisionData
+  decisionId: D09_ProteccionInstalaciones
+  order: 9
+  stageName: "Protecci\xF3n de instalaciones"
+  context: "Un grupo de manifestantes intenta aproximarse al umbral vehicular de la UTOP y a las puertas laterales sobre la Calle Jun\xEDn."
+  question: "\xBFQu\xE9 medida f\xEDsica de protecci\xF3n perimetral adoptas para asegurar las instalaciones policiales?"
+  kind: 0
+  shuffleOptions: 1
+  primaryCriterion: 2
+  hasSecondaryCriterion: 1
+  secondaryCriterion: 0
+  secondaryShare: 0.4
+  options:
+  - id: D09_EXC
+    text: "Desplegar y anclar las barreras met\xE1licas (BARRERAGRANDE y BARRICADA) en el acceso vehicular, asegurar postigos laterales y mantener la l\xEDnea de escudos detr\xE1s de la valla."
+    classification: 0
+    score: 100
+    immediateConsequence: "Las barreras f\xEDsicas quedan instaladas en el p\xF3rtico de la UTOP creando un amortiguador seguro que impide el ingreso sin contacto cuerpo a cuerpo."
+    variableEffects:
+    - variable: 1
+      delta: 18
+    - variable: 5
+      delta: 12
+    - variable: 6
+      delta: -8
+    deferredConsequences: []
+    setFlags:
+    - D09_BARRIERS_DEPLOYED
+    criticalViolation: 0
+    reactionTag: D09_BARRIERS_EXCELLENT
+    numericValue: 0
+  - id: D09_GOOD
+    text: "Cerrar parcialmente el paso con una barrera m\xF3vil y concentrar una doble fila de efectivos en el umbral del garaje."
+    classification: 1
+    score: 86
+    immediateConsequence: "El acceso queda contenido de forma efectiva, aunque con menor separaci\xF3n f\xEDsica respecto a la acera."
+    variableEffects:
+    - variable: 1
+      delta: 10
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 0
+    reactionTag: D09_BARRIERS_GOOD
+    numericValue: 0
+  - id: D09_MOD
+    text: "Dejar el acceso vehicular libre de barreras f\xEDsicas confiando \xFAnicamente en el cord\xF3n humano sobre el bordillo."
+    classification: 2
+    score: 60
+    immediateConsequence: "El contacto directo empuja la l\xEDnea policial hacia el interior del garaje y eleva la fricci\xF3n f\xEDsica."
+    variableEffects:
+    - variable: 1
+      delta: -14
+    - variable: 6
+      delta: 10
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 0
+    reactionTag: D09_BARRIERS_NONE
+    numericValue: 0
+  - id: D09_GRAVE
+    text: Abandonar la custodia de las puertas laterales y del garaje para desplazar a todo el contingente hacia el centro de la cuadra.
+    classification: 3
+    score: 36
+    immediateConsequence: El recinto policial queda desprotegido ante intrusiones y se compromete la seguridad del armamento e instalaciones.
+    variableEffects:
+    - variable: 1
+      delta: -28
+    - variable: 5
+      delta: -18
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 1
+    reactionTag: D09_BARRIERS_ABANDONED
+    numericValue: 0
+  skipConditions: []
+  contextModifiers: []
+  preEventTag: 

@@ -1,0 +1,129 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab39acaa91aecb945b15e65e0081ac20, type: 3}
+  m_Name: Decision_03_D03_DistribucionEfectivos
+  m_EditorClassIdentifier: Assembly-CSharp::SimuladorBloqueos.Decisions.DecisionData
+  decisionId: D03_DistribucionEfectivos
+  order: 3
+  stageName: "Distribuci\xF3n de efectivos"
+  context: "Con el contingente ya formado en el Patio de Honor, debes distribuir exactamente a tus efectivos entre las tres responsabilidades esenciales: 1) Protecci\xF3n de accesos, 2) Observaci\xF3n y reporte, y 3) Coordinaci\xF3n y comunicaciones."
+  question: "\xBFC\xF3mo distribuyes los efectivos seleccionados entre Protecci\xF3n, Observaci\xF3n y Comunicaciones?"
+  kind: 2
+  shuffleOptions: 1
+  primaryCriterion: 2
+  hasSecondaryCriterion: 1
+  secondaryCriterion: 4
+  secondaryShare: 0.35
+  options:
+  - id: D03_EXC
+    text: "Distribuci\xF3n equilibrada: asignar ~46% a Protecci\xF3n perimetral, ~27% a Observaci\xF3n de puntos altos/accesos y ~27% a Coordinaci\xF3n y comunicaciones."
+    classification: 0
+    score: 100
+    immediateConsequence: "Los tres equipos ocupan sus puestos en el Patio, P\xF3rtico y Sala de Operaciones con cobertura integral y enlace continuo."
+    variableEffects:
+    - variable: 1
+      delta: 12
+    - variable: 3
+      delta: 12
+    - variable: 2
+      delta: 12
+    deferredConsequences: []
+    setFlags:
+    - D03_BALANCED
+    criticalViolation: 0
+    reactionTag: D03_DIST_EXCELLENT
+    numericValue: 0
+  - id: D03_GOOD
+    text: "Distribuci\xF3n funcional con prioridad en contenci\xF3n: reforzar Protecci\xF3n (~56%) manteniendo equipos reducidos pero activos en Observaci\xF3n y Comunicaciones."
+    classification: 1
+    score: 86
+    immediateConsequence: "La l\xEDnea de protecci\xF3n queda s\xF3lida y se mantiene enlace b\xE1sico, aunque el equipo de comunicaciones trabajar\xE1 con mayor carga."
+    variableEffects:
+    - variable: 1
+      delta: 10
+    - variable: 3
+      delta: 6
+    - variable: 2
+      delta: 4
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 0
+    reactionTag: D03_DIST_GOOD
+    numericValue: 0
+  - id: D03_MOD
+    text: "Concentraci\xF3n excesiva en una sola \xE1rea: destinar casi todo el personal a la puerta principal dejando solo 1 efectivo en Observaci\xF3n y 1 en Comunicaciones."
+    classification: 2
+    score: 64
+    immediateConsequence: "Saturaci\xF3n de personal en un \xFAnico punto y vigilancia deficiente de los flancos y de la pendiente de Calle Jun\xEDn."
+    variableEffects:
+    - variable: 3
+      delta: -14
+    - variable: 2
+      delta: -12
+    deferredConsequences:
+    - id: DEF_D03_BLIND_FLANK
+      afterDecisions: 3
+      description: "La debilidad en observaci\xF3n y enlace derivada de la mala distribuci\xF3n en la Decisi\xF3n 3 retrasa la detecci\xF3n temprana de amenazas en la calle."
+      effects:
+      - variable: 3
+        delta: -8
+      - variable: 5
+        delta: -6
+      setFlag: 
+      scoreDelta: -4
+      criterion: 2
+    setFlags:
+    - D03_WEAK_OBS_COMM
+    criticalViolation: 0
+    reactionTag: D03_DIST_UNBALANCED
+    numericValue: 0
+  - id: D03_GRAVE
+    text: "Desatender una responsabilidad esencial: dejar Coordinaci\xF3n y Comunicaciones (o Observaci\xF3n) con 0 efectivos asignados."
+    classification: 3
+    score: 38
+    immediateConsequence: "Un \xE1rea cr\xEDtica queda completamente descubierta (0 efectivos), rompiendo el control operacional y la seguridad del contingente."
+    variableEffects:
+    - variable: 2
+      delta: -25
+    - variable: 3
+      delta: -18
+    - variable: 5
+      delta: -12
+    deferredConsequences:
+    - id: DEF_D03_COMMS_COLLAPSE
+      afterDecisions: 2
+      description: "Haber dejado un \xE1rea esencial sin personal en la Decisi\xF3n 3 provoca p\xE9rdida de coordinaci\xF3n entre el mando y el p\xF3rtico."
+      effects:
+      - variable: 2
+        delta: -12
+      - variable: 6
+        delta: 10
+      setFlag: 
+      scoreDelta: -6
+      criterion: 4
+    setFlags:
+    - D03_ZERO_AREA
+    - COMMS_VULNERABLE
+    criticalViolation: 1
+    reactionTag: D03_DIST_ZERO
+    numericValue: 0
+  skipConditions: []
+  contextModifiers:
+  - condition:
+      kind: 0
+      flag: D02_UNDERSTAFFED_5
+      variable: 0
+      threshold: 0
+    addedContext: "Con solo 5 efectivos seleccionados en la Decisi\xF3n 2, el margen para cubrir las 3 \xE1reas sin debilitar el per\xEDmetro es sumamente estrecho."
+    topOptionsScoreDelta: -4
+    effectsOnShow: []
+  preEventTag: 

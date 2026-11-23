@@ -1,0 +1,99 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab39acaa91aecb945b15e65e0081ac20, type: 3}
+  m_Name: Decision_06_D06_CoordinacionRadio
+  m_EditorClassIdentifier: Assembly-CSharp::SimuladorBloqueos.Decisions.DecisionData
+  decisionId: D06_CoordinacionRadio
+  order: 6
+  stageName: "Coordinaci\xF3n por radio"
+  context: "Los grupos toman posici\xF3n entre el Patio, la Sala de Operaciones y el acceso a la Calle Jun\xEDn. El ruido exterior de petardos y c\xE1nticos empieza a incrementarse."
+  question: "\xBFC\xF3mo configuras el protocolo de comunicaciones por radio entre los tres sectores?"
+  kind: 0
+  shuffleOptions: 1
+  primaryCriterion: 4
+  hasSecondaryCriterion: 0
+  secondaryCriterion: 2
+  secondaryShare: 0
+  options:
+  - id: D06_EXC
+    text: "Establecer un canal t\xE1ctico principal con c\xF3digos breves, un canal de respaldo, reportes peri\xF3dicos desde Observaci\xF3n y enlace directo con el Capit\xE1n."
+    classification: 0
+    score: 100
+    immediateConsequence: "Comunicaciones fluidas y redundantes que garantizan alerta temprana ante cualquier cambio en la manifestaci\xF3n."
+    variableEffects:
+    - variable: 2
+      delta: 18
+    - variable: 3
+      delta: 10
+    deferredConsequences: []
+    setFlags:
+    - D06_RADIO_REDUNDANT
+    criticalViolation: 0
+    reactionTag: D06_RADIO_EXCELLENT
+    numericValue: 0
+  - id: D06_GOOD
+    text: Mantener a todos los sectores en una misma frecuencia abierta con prioridad para el jefe operativo.
+    classification: 1
+    score: 86
+    immediateConsequence: "El enlace funciona adecuadamente en condiciones normales, aunque puede saturarse si ocurren varios eventos simult\xE1neos."
+    variableEffects:
+    - variable: 2
+      delta: 8
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 0
+    reactionTag: D06_RADIO_GOOD
+    numericValue: 0
+  - id: D06_MOD
+    text: "Depender \xFAnicamente de \xF3rdenes a viva voz y se\xF1ales manuales desde el patio sin verificar frecuencias de radio."
+    classification: 2
+    score: 62
+    immediateConsequence: "El ruido de la calle dificulta escuchar las \xF3rdenes en el p\xF3rtico y retrasa los reportes de observaci\xF3n."
+    variableEffects:
+    - variable: 2
+      delta: -16
+    - variable: 3
+      delta: -8
+    deferredConsequences:
+    - id: DEF_D06_NO_BACKUP_CH
+      afterDecisions: 5
+      description: "No haber configurado un canal de radio de respaldo en la Decisi\xF3n 6 agrava el bloqueo de comunicaciones en la fase cr\xEDtica."
+      effects:
+      - variable: 2
+        delta: -10
+      setFlag: 
+      scoreDelta: -4
+      criterion: 4
+    setFlags:
+    - COMMS_VULNERABLE
+    criticalViolation: 0
+    reactionTag: D06_RADIO_WEAK
+    numericValue: 0
+  - id: D06_GRAVE
+    text: Apagar los equipos de radio para evitar interferencias y actuar sin reportar novedades a la Sala de Operaciones ni al mando superior.
+    classification: 3
+    score: 42
+    immediateConsequence: "Ruptura total del mando y control institucional; las unidades quedan aisladas sin supervisi\xF3n ni apoyo."
+    variableEffects:
+    - variable: 2
+      delta: -30
+    - variable: 5
+      delta: -12
+    deferredConsequences: []
+    setFlags:
+    - COMMS_VULNERABLE
+    criticalViolation: 1
+    reactionTag: D06_RADIO_OFF
+    numericValue: 0
+  skipConditions: []
+  contextModifiers: []
+  preEventTag: 

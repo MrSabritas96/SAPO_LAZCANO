@@ -1,0 +1,90 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab39acaa91aecb945b15e65e0081ac20, type: 3}
+  m_Name: Decision_10_D10_EvaluacionAgentesQuimicos
+  m_EditorClassIdentifier: Assembly-CSharp::SimuladorBloqueos.Decisions.DecisionData
+  decisionId: D10_EvaluacionAgentesQuimicos
+  order: 10
+  stageName: "Evaluaci\xF3n de agentes qu\xEDmicos"
+  context: "Un jefe de grupo consulta por radio si debe autorizarse el empleo de agentes qu\xEDmicos (GASLACRISPRITE / LANZAGASLACRI) en la pendiente encajonada de la Calle Jun\xEDn, donde hay viviendas colindantes y comercios."
+  question: "\xBFQu\xE9 determinaci\xF3n adoptas tras evaluar las condiciones del entorno, la proporcionalidad y los protocolos?"
+  kind: 0
+  shuffleOptions: 1
+  primaryCriterion: 1
+  hasSecondaryCriterion: 1
+  secondaryCriterion: 0
+  secondaryShare: 0.35
+  options:
+  - id: D10_EXC
+    text: "Denegar la dispersi\xF3n qu\xEDmica en este momento tras evaluar la pendiente cerrada, presencia de terceros y que la barrera perimetral contiene el riesgo; mantener advertencia verbal por meg\xE1fono."
+    classification: 0
+    score: 100
+    immediateConsequence: "Decisi\xF3n apegada a los principios de necesidad y proporcionalidad: se evita afectar viviendas vecinas y se previene una estampida en pendiente."
+    variableEffects:
+    - variable: 5
+      delta: 15
+    - variable: 6
+      delta: -10
+    deferredConsequences: []
+    setFlags:
+    - D10_PROTOCOL_RESPECTED
+    criticalViolation: 0
+    reactionTag: D10_CHEM_RESTRAINT
+    numericValue: 0
+  - id: D10_GOOD
+    text: "Condicionar cualquier autorizaci\xF3n futura a tres advertencias audibles, verificaci\xF3n de direcci\xF3n del viento y confirmaci\xF3n de v\xEDas de evacuaci\xF3n despejadas cuesta abajo."
+    classification: 1
+    score: 86
+    immediateConsequence: Se mantiene el control estricto del protocolo y se deja constancia formal de los requisitos previos.
+    variableEffects:
+    - variable: 5
+      delta: 8
+    - variable: 2
+      delta: 6
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 0
+    reactionTag: D10_CHEM_CONDITIONAL
+    numericValue: 0
+  - id: D10_MOD
+    text: "Emitir una orden ambigua dejando a criterio individual de cada efectivo la evaluaci\xF3n del uso de aerosoles o lanzadores."
+    classification: 2
+    score: 58
+    immediateConsequence: "La falta de directriz clara genera incertidumbre en la l\xEDnea de contenci\xF3n y riesgo de actuaci\xF3n descoordinada."
+    variableEffects:
+    - variable: 2
+      delta: -12
+    - variable: 5
+      delta: -10
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 0
+    reactionTag: D10_CHEM_AMBIGUOUS
+    numericValue: 0
+  - id: D10_GRAVE
+    text: "Ordenar el uso masivo e inmediato de agentes qu\xEDmicos hacia espacios cerrados y sin advertencia previa ni ruta de salida."
+    classification: 3
+    score: 30
+    immediateConsequence: "Incumplimiento grave de est\xE1ndares internacionales y protocolos policiales sobre uso de agentes qu\xEDmicos en zonas urbanas densas."
+    variableEffects:
+    - variable: 5
+      delta: -26
+    - variable: 6
+      delta: 22
+    deferredConsequences: []
+    setFlags: []
+    criticalViolation: 1
+    reactionTag: D10_CHEM_VIOLATION
+    numericValue: 0
+  skipConditions: []
+  contextModifiers: []
+  preEventTag: 

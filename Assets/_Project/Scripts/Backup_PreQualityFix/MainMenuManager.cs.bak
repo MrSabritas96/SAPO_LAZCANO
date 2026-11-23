@@ -1,0 +1,139 @@
+using SimuladorBloqueos.Data;
+using SimuladorBloqueos.UI;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+
+namespace SimuladorBloqueos.Core
+{
+    /// <summary>
+    /// Orquestador principal del Menú Principal.
+    /// Conecta las acciones de los botones principales y controla el ciclo de vida de la pantalla.
+    /// </summary>
+    public class MainMenuManager : MonoBehaviour
+    {
+        [Header("Botones Principales")]
+        public Button newSimulationButton;
+        public Button continueButton;
+        public Button historyButton;
+        public Button statisticsButton;
+        public Button settingsButton;
+        public Button exitButton;
+
+        [Header("Navegación")]
+        public MenuNavigationController navigationController;
+
+        [Header("Escena de Simulación")]
+        public string simulationSceneName = "SampleScene";
+
+        private void Awake()
+        {
+            Application.runInBackground = true;
+        }
+
+        private void Start()
+        {
+            // Asegurar cursor libre y visible en el menú
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+
+            // Vincular botones
+            if (newSimulationButton != null)
+                newSimulationButton.onClick.AddListener(OnNewSimulation);
+
+            if (continueButton != null)
+            {
+                continueButton.onClick.AddListener(OnContinueSimulation);
+                UpdateContinueButtonState();
+            }
+
+            if (historyButton != null)
+                historyButton.onClick.AddListener(OnHistory);
+
+            if (statisticsButton != null)
+                statisticsButton.onClick.AddListener(OnStatistics);
+
+            if (settingsButton != null)
+                settingsButton.onClick.AddListener(OnSettings);
+
+            if (exitButton != null)
+                exitButton.onClick.AddListener(OnExitGame);
+        }
+
+        private void Update()
+        {
+            // Atajo ESC: volver al panel principal si se está en un subpanel
+            bool escPressed = false;
+#if ENABLE_INPUT_SYSTEM
+            if (UnityEngine.InputSystem.Keyboard.current != null)
+            {
+                escPressed = UnityEngine.InputSystem.Keyboard.current.escapeKey.wasPressedThisFrame;
+            }
+#else
+            escPressed = Input.GetKeyDown(KeyCode.Escape);
+#endif
+            if (escPressed && navigationController != null)
+            {
+                navigationController.OpenMainMenu();
+            }
+        }
+
+        public void UpdateContinueButtonState()
+        {
+            if (continueButton == null) return;
+
+            bool canContinue = GameSessionManager.Instance != null && GameSessionManager.Instance.CanContinueSession();
+            continueButton.interactable = canContinue;
+
+            // Ajustar visualmente el texto del botón si está deshabilitado
+            var text = continueButton.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+            if (text != null)
+            {
+                text.color = canContinue ? Color.white : new Color(0.5f, 0.55f, 0.6f, 0.45f);
+            }
+        }
+
+        private void OnNewSimulation()
+        {
+            if (navigationController != null)
+                navigationController.OpenRegistration();
+        }
+
+        private void OnContinueSimulation()
+        {
+            if (GameSessionManager.Instance != null && GameSessionManager.Instance.CanContinueSession())
+            {
+                Debug.Log($"[MainMenu] Continuando simulación previa con {GameSessionManager.Instance.activeParticipant.fullName}...");
+                SceneManager.LoadScene(simulationSceneName);
+            }
+        }
+
+        private void OnHistory()
+        {
+            if (navigationController != null)
+                navigationController.OpenHistory();
+        }
+
+        private void OnStatistics()
+        {
+            if (navigationController != null)
+                navigationController.OpenStatistics();
+        }
+
+        private void OnSettings()
+        {
+            if (navigationController != null)
+                navigationController.OpenSettings();
+        }
+
+        private void OnExitGame()
+        {
+            Debug.Log("[MainMenu] Cerrando aplicación...");
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+    }
+}

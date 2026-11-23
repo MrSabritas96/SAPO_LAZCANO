@@ -1,0 +1,119 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab39acaa91aecb945b15e65e0081ac20, type: 3}
+  m_Name: Decision_02_D02_CantidadEfectivos
+  m_EditorClassIdentifier: Assembly-CSharp::SimuladorBloqueos.Decisions.DecisionData
+  decisionId: D02_CantidadEfectivos
+  order: 2
+  stageName: Cantidad de efectivos
+  context: "En la Cuadra de Tropa N\xB0 1 aguardan 30 efectivos UTOP disponibles. Debes definir cu\xE1ntos efectivos conformar\xE1n el contingente activo para proteger las instalaciones, mantener observaci\xF3n y asegurar las comunicaciones sin agotar la reserva."
+  question: "\xBFCu\xE1ntos efectivos seleccionas para conformar el contingente operativo en el Patio de Honor?"
+  kind: 1
+  shuffleOptions: 0
+  primaryCriterion: 2
+  hasSecondaryCriterion: 0
+  secondaryCriterion: 4
+  secondaryShare: 0
+  options:
+  - id: D02_5
+    text: Seleccionar 5 efectivos UTOP.
+    classification: 2
+    score: 95
+    immediateConsequence: "Solo 5 efectivos salen al Patio de Honor. La cantidad resulta insuficiente para cubrir simult\xE1neamente protecci\xF3n, observaci\xF3n y comunicaciones."
+    variableEffects:
+    - variable: 0
+      delta: -22
+    - variable: 1
+      delta: -14
+    - variable: 3
+      delta: -10
+    deferredConsequences:
+    - id: DEF_D02_5_FATIGUE
+      afterDecisions: 3
+      description: "La escasez de personal (solo 5 efectivos asignados en la Decisi\xF3n 2) sobrecarga los puestos de guardia y deja flancos sin relevo."
+      effects:
+      - variable: 1
+        delta: -8
+      - variable: 5
+        delta: -6
+      setFlag: CONTINGENT_OVERLOADED
+      scoreDelta: -4
+      criterion: 2
+    setFlags:
+    - D02_UNDERSTAFFED_5
+    criticalViolation: 0
+    reactionTag: D02_COUNT_5
+    numericValue: 5
+  - id: D02_15
+    text: Seleccionar 15 efectivos UTOP.
+    classification: 0
+    score: 100
+    immediateConsequence: "15 efectivos forman en el Patio de Honor: equilibrio \xF3ptimo entre cobertura perimetral, observaci\xF3n, enlace y reserva org\xE1nica en cuadra."
+    variableEffects:
+    - variable: 0
+      delta: 15
+    - variable: 1
+      delta: 12
+    - variable: 3
+      delta: 10
+    deferredConsequences: []
+    setFlags:
+    - D02_OPTIMAL_15
+    criticalViolation: 0
+    reactionTag: D02_COUNT_15
+    numericValue: 15
+  - id: D02_20
+    text: Seleccionar 20 efectivos UTOP.
+    classification: 1
+    score: 98
+    immediateConsequence: '20 efectivos forman en el Patio de Honor: brinda buena cobertura operativa aunque reduce parcialmente la reserva de descanso.'
+    variableEffects:
+    - variable: 0
+      delta: 8
+    - variable: 1
+      delta: 10
+    deferredConsequences: []
+    setFlags:
+    - D02_GOOD_20
+    criticalViolation: 0
+    reactionTag: D02_COUNT_20
+    numericValue: 20
+  - id: D02_30
+    text: Seleccionar 30 efectivos UTOP (totalidad de la cuadra).
+    classification: 3
+    score: 96
+    immediateConsequence: "Los 30 efectivos salen al Patio de Honor dejando 0 efectivos de reserva para relevos o emergencias internas y proyectando una sobrerreacci\xF3n."
+    variableEffects:
+    - variable: 0
+      delta: -15
+    - variable: 6
+      delta: 12
+    deferredConsequences:
+    - id: DEF_D02_30_NORESERVE
+      afterDecisions: 4
+      description: Al haber comprometido los 30 efectivos desde el inicio sin dejar reserva en la Cuadra 1, el contingente acusa desgaste sin posibilidad de relevo.
+      effects:
+      - variable: 0
+        delta: -10
+      - variable: 2
+        delta: -6
+      setFlag: NO_RESERVE_AVAILABLE
+      scoreDelta: -5
+      criterion: 2
+    setFlags:
+    - D02_OVERCOMMITTED_30
+    criticalViolation: 0
+    reactionTag: D02_COUNT_30
+    numericValue: 30
+  skipConditions: []
+  contextModifiers: []
+  preEventTag: 
